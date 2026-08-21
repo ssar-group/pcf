@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ssar-group/.github/main/public/schemas/project-manifest.schema.json",
+
+  "version": 4,
+
+  "information": {
+    "name": "pcf",
+    "version": "E.0.1",
+    "type": ["backend", "runtime", "language"],
+
+    "label": [
+      "backend",
+      "developer-tools",
+      "programming-language",
+      "runtime",
+      "open-source"
+    ],
+
+    "require": ["rust", "pcf.standard"],
+
+    "software": {
+      "target": "Rust",
+      "version": ">=1.90.0"
+    }
+  },
+
+  "internal": {
+    "id": "08974362-bad6-4219-bf68-337a322ce58d",
+    "project": "b5bbcb55-dfbb-4785-968e-b342c9fdbe8e"
+  }
+}

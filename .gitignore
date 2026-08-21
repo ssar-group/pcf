@@ -1,0 +1,12 @@
+# SSAR Dev Files
+**.release.*
+*.ulix3
+
+# Rust
+/target
+
+# other
+.idea
+.vscode
+.studio
+.dt2
