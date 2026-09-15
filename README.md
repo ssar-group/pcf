@@ -4,67 +4,108 @@
 ![Version](https://img.shields.io/badge/version-E.0.1-blueviolet.svg?colorA=303033&colorB=6315ac)
 ![Platform](https://img.shields.io/badge/platform-cross--platform-000000.svg?colorA=303033&colorB=fff)
 
-**PCF (Processing Compact File)** is a compact, extensible system for representing, processing, and exchanging structured data. It is language, framework, and platform-agnostic, and is designed to sit underneath applications, backend services, APIs, developer tools, configuration systems, and caches alike.
+**PCF (Processing Compact File)** is a compact and extensible format and processing system for working with structured data.
 
-This repository is being organized as a Rust workspace. The base scaffold focuses on the language, runtime, standard library, tooling, and generic ecosystem contracts. SSAR-specific ecosystem code is intentionally kept out of the base workspace and can live as separate libraries later.
+The goal is simple: provide a common foundation for applications, backend services, APIs, developer tools, configuration files, caches, and other systems that need to store or exchange structured data.
+
+PCF is designed to remain independent from any particular programming language, framework, or platform. It can be used on its own, or as a foundation for larger ecosystems.
+
+> [!NOTE]
+> PCF is currently experimental and under active development. APIs, the specification, and the internal architecture may change as the project evolves.
 
 ## Architecture
 
-PCF is organized in four layers, each depending only on the one below it:
+PCF is built in layers. Each layer builds on the one below it, while keeping its own responsibilities and dependencies clearly separated.
 
 ```text
 ┌──────────────────────────────────────┐
 │          Applications / Services     │
 ├──────────────────────────────────────┤
-│           Ecosystem Libraries        │
-│              Integrations            │
+│        Ecosystem Libraries           │
+│             Integrations             │
 ├──────────────────────────────────────┤
 │         PCF Standard Libraries       │
 ├──────────────────────────────────────┤
-│               PCF Core               │
+│              PCF Core                │
 └──────────────────────────────────────┘
 ```
 
-**PCF Core** — parsing, processing, and the file format / data structure definitions. No external or ecosystem dependencies.
+### PCF Core
 
-**Standard Libraries** — common functionality built on top of the core: data structures and utilities, file and data processing, serialization and formatting, networking, and other backend primitives. Versioned and evolved independently of the core, while staying compatible with the underlying specification.
+The core is the foundation of PCF.
 
-**Ecosystem Libraries** — integrations for specific environments. The SSAR ecosystem, for instance, maintains its own PCF libraries for SSAR applications and services. These stay fully separate from the core and Standard Libraries, so PCF can support both general-purpose projects and specialized ecosystems without coupling the two.
+It contains the parser, processing logic, file format definitions, and the fundamental data structures used throughout the project.
+
+The core is intentionally kept small and independent. It should not depend on a specific ecosystem or application.
+
+### Standard Libraries
+
+Standard Libraries provide functionality that is useful for most PCF-based projects.
+
+This includes things such as data structures, utilities, file and data processing, serialization, formatting, networking, and other common backend functionality.
+
+They are developed separately from the core so they can evolve without unnecessarily changing the underlying PCF format.
+
+### Ecosystem Libraries
+
+Ecosystem Libraries provide integrations for specific environments or projects.
+
+For example, the SSAR ecosystem can provide its own PCF libraries for SSAR applications and services without adding SSAR-specific functionality to PCF itself.
+
+Keeping these libraries separate allows PCF to remain useful as a general-purpose project while still being extensible for more specialized ecosystems.
 
 ## Design Principles
 
-- **Simple** — an easy-to-understand format and processing model.
-- **Compact** — minimal overhead.
-- **Structured** — a consistent, predictable data model.
-- **Extensible** — libraries and ecosystems build on top without touching the core.
-- **Portable** — no dependency on a specific platform or technology.
-- **Modular** — core, standard libraries, and ecosystem integrations stay strictly separated.
+PCF is built around a few straightforward principles:
 
-## What's in this repository
+- **Simple** — the format should be easy to understand and work with.
+- **Compact** — avoid unnecessary overhead when representing data.
+- **Structured** — provide a consistent and predictable data model.
+- **Extensible** — allow libraries and ecosystems to add functionality without modifying the core.
+- **Portable** — PCF should not depend on a specific platform or programming language.
+- **Modular** — keep the core, standard libraries, and ecosystem integrations clearly separated.
 
-- PCF core processing and parsing logic
+## Repository
+
+This repository contains the foundation of the PCF ecosystem, including:
+
+- PCF core processing and parsing
 - File format and data structure definitions
-- Serialization / deserialization
+- Serialization and deserialization
 - Standard Libraries
-- Ecosystem-specific libraries and integrations
+- Ecosystem libraries and integrations
 - Documentation and technical specifications
-- Development and testing resources
+- Development and testing tools
+
+The project is organized as a Rust workspace, with the different components maintained as separate crates.
+
+SSAR-specific functionality is intentionally kept outside of the base PCF workspace. It can be developed and maintained as separate libraries when needed.
 
 ## Contributing
 
-- Report bugs and request features via [GitHub Issues](https://github.com/ssar-group)
-- Submit changes through pull requests
-- Improve the PCF specification and documentation
-- Build Standard Libraries or ecosystem integrations
-- Test PCF against different applications and backend architectures, and report compatibility issues
+PCF is still evolving, and contributions can help shape both the implementation and the specification.
 
-This project follows the [SSAR Open Source Code of Conduct](https://docs.ssar-group.com/opensource/code-of-conduct?ver=3). Questions: [contactus@ssar-group.com](mailto:contactus@ssar-group.com).
+You can contribute by:
+
+- Reporting bugs or suggesting features
+- Opening pull requests
+- Improving the documentation
+- Discussing or improving the PCF specification
+- Building Standard Libraries
+- Creating ecosystem integrations
+- Testing PCF with different applications and backend architectures
+
+For bugs and feature requests, use [GitHub Issues](https://github.com/ssar-group).
+
+This project follows the [SSAR Open Source Code of Conduct](https://docs.ssar-group.com/opensource/code-of-conduct?ver=3).
+
+For questions or other inquiries, contact [contactus@ssar-group.com](mailto:contactus@ssar-group.com).
 
 ## License
 
-PCF is released under the MIT License — see [`LICENSE`](./LICENSE) for the full text.
+PCF is released under the MIT License. See [`LICENSE`](./LICENSE) for the full license text.
 
-The MIT License covers the open-source contents of this repository only. Proprietary software, technologies, assets, trademarks, and components owned by SSAR Group or its partners are not covered unless explicitly stated otherwise.
+The MIT License applies only to the open-source contents of this repository. Proprietary software, technologies, assets, trademarks, and other components owned by SSAR Group or its partners are not covered unless explicitly stated otherwise.
 
 ---
 
