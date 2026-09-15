@@ -1,0 +1,13 @@
+[package]
+name = "pcf"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-ast = { path = "../pcf-ast" }
+pcf-diagnostics = { path = "../pcf-diagnostics" }
+pcf-lexer = { path = "../pcf-lexer" }
+pcf-parser = { path = "../pcf-parser" }
+pcf-runtime = { path = "../pcf-runtime" }
+pcf-stdlib = { path = "../pcf-stdlib" }
+pcf-span = { path = "../pcf-span" }

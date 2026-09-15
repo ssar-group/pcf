@@ -1,0 +1,10 @@
+[package]
+name = "pcf-resolver"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-ast = { path = "../pcf-ast" }
+pcf-diagnostics = { path = "../pcf-diagnostics" }
+pcf-span = { path = "../pcf-span" }
+

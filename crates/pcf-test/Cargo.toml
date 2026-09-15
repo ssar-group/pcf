@@ -1,0 +1,8 @@
+[package]
+name = "pcf-test"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf = { path = "../pcf" }
+

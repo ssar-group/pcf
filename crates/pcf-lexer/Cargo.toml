@@ -1,0 +1,9 @@
+[package]
+name = "pcf-lexer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-diagnostics = { path = "../pcf-diagnostics" }
+pcf-span = { path = "../pcf-span" }
+pcf-token = { path = "../pcf-token" }

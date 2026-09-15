@@ -6,6 +6,8 @@
 
 **PCF (Processing Compact File)** is a compact, extensible system for representing, processing, and exchanging structured data. It is language, framework, and platform-agnostic, and is designed to sit underneath applications, backend services, APIs, developer tools, configuration systems, and caches alike.
 
+This repository is being organized as a Rust workspace. The base scaffold focuses on the language, runtime, standard library, tooling, and generic ecosystem contracts. SSAR-specific ecosystem code is intentionally kept out of the base workspace and can live as separate libraries later.
+
 ## Architecture
 
 PCF is organized in four layers, each depending only on the one below it:

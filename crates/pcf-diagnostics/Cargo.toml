@@ -1,0 +1,13 @@
+[package]
+name = "pcf-diagnostics"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-span = { path = "../pcf-span" }
+serde = { workspace = true, optional = true }
+
+[features]
+default = []
+serde = ["dep:serde"]
+

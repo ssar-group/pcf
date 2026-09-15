@@ -1,12 +1,33 @@
-# SSAR Dev Files
-**.release.*
+# Release artifacts
+**/.release.*
 *.ulix3
 
-# Rust
-/target
+# Tests
+**/test/
+**/tests/
+**/*.test.*
+**/*.spec.*
 
-# other
-.idea
-.vscode
-.studio
-.dt2
+# PCF
+/.pcf/
+/out/
+
+# Rust
+/target/
+
+# IDEs
+.idea/
+.vscode/
+.studio/
+.studio-dat
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary / Logs
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo

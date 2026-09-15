@@ -1,0 +1,9 @@
+[package]
+name = "pcf-validator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-ast = { path = "../pcf-ast" }
+pcf-diagnostics = { path = "../pcf-diagnostics" }
+

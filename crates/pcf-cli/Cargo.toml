@@ -1,0 +1,11 @@
+[package]
+name = "pcf-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+pcf = { path = "../pcf" }
+pcf-lexer = { path = "../pcf-lexer" }
+pcf-span = { path = "../pcf-span" }

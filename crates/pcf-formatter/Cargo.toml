@@ -1,0 +1,8 @@
+[package]
+name = "pcf-formatter"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-ast = { path = "../pcf-ast" }
+

@@ -1,0 +1,8 @@
+[package]
+name = "pcf-ast"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-span = { path = "../pcf-span" }
+

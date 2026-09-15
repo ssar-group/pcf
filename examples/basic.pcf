@@ -1,0 +1,5 @@
+// Basic Example File
+// Version 4.1
+// PCF Version E.0.1
+
+allow_methods { GET }

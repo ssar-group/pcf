@@ -1,0 +1,9 @@
+[package]
+name = "pcf-stdlib"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-runtime = { path = "../pcf-runtime" }
+thiserror = { workspace = true }
+

@@ -1,0 +1,9 @@
+[package]
+name = "pcf-ecosystem-ssar"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pcf-ecosystem = { path = "../pcf-ecosystem" }
+pcf-runtime = { path = "../pcf-runtime" }
+
