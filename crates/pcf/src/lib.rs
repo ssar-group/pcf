@@ -121,7 +121,11 @@ mod tests {
     #[test]
     fn collects_static_outputs_in_order() {
         let result = check("output \"hello\"\noutput \"world\"\n").expect("check result");
-        let contents: Vec<_> = result.outputs.into_iter().map(|output| output.content).collect();
+        let contents: Vec<_> = result
+            .outputs
+            .into_iter()
+            .map(|output| output.content)
+            .collect();
         assert_eq!(contents, vec!["hello".to_string(), "world".to_string()]);
     }
 

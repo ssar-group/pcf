@@ -13,7 +13,10 @@ impl Ecosystem for SsarEcosystem {
         "SSAR"
     }
 
-    fn register(&self, _registry: &mut RuntimeRegistry) -> Result<(), pcf_ecosystem::EcosystemError> {
+    fn register(
+        &self,
+        _registry: &mut RuntimeRegistry,
+    ) -> Result<(), pcf_ecosystem::EcosystemError> {
         Ok(())
     }
 }

@@ -122,7 +122,10 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_separators(&mut self) {
-        while matches!(self.current_kind(), Some(TokenKind::Newline | TokenKind::Semicolon)) {
+        while matches!(
+            self.current_kind(),
+            Some(TokenKind::Newline | TokenKind::Semicolon)
+        ) {
             self.advance();
         }
     }

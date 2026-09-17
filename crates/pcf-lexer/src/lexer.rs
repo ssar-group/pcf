@@ -1,6 +1,6 @@
 use pcf_diagnostics::{Diagnostic, DiagnosticCode, Label, Severity};
 use pcf_span::Span;
-use pcf_token::{keyword_kind, Token, TokenKind};
+use pcf_token::{Token, TokenKind, keyword_kind};
 
 use crate::{
     cursor::Cursor,
@@ -49,11 +49,31 @@ pub fn lex(source: &str) -> LexResult {
             c if c.is_ascii_digit() => lex_number(&mut cursor, start, source, &mut result),
             c if is_identifier_start(c) => result.tokens.push(lex_identifier(&mut cursor, start)),
             '{' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::LeftBrace),
-            '}' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::RightBrace),
-            '[' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::LeftBracket),
-            ']' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::RightBracket),
+            '}' => push_single(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::RightBrace,
+            ),
+            '[' => push_single(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::LeftBracket,
+            ),
+            ']' => push_single(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::RightBracket,
+            ),
             '(' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::LeftParen),
-            ')' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::RightParen),
+            ')' => push_single(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::RightParen,
+            ),
             ':' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Colon),
             ';' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Semicolon),
             ',' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Comma),
@@ -65,15 +85,21 @@ pub fn lex(source: &str) -> LexResult {
             '!' if cursor.peek_next() == Some('=') => {
                 push_double(&mut result.tokens, &mut cursor, start, TokenKind::BangEqual)
             }
-            '=' if cursor.peek_next() == Some('=') => {
-                push_double(&mut result.tokens, &mut cursor, start, TokenKind::EqualEqual)
-            }
+            '=' if cursor.peek_next() == Some('=') => push_double(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::EqualEqual,
+            ),
             '<' if cursor.peek_next() == Some('=') => {
                 push_double(&mut result.tokens, &mut cursor, start, TokenKind::LessEqual)
             }
-            '>' if cursor.peek_next() == Some('=') => {
-                push_double(&mut result.tokens, &mut cursor, start, TokenKind::GreaterEqual)
-            }
+            '>' if cursor.peek_next() == Some('=') => push_double(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::GreaterEqual,
+            ),
             '&' if cursor.peek_next() == Some('&') => {
                 push_double(&mut result.tokens, &mut cursor, start, TokenKind::And)
             }
@@ -163,12 +189,14 @@ fn lex_number(cursor: &mut Cursor<'_>, start: usize, source: &str, result: &mut 
             TokenKind::Unknown('?')
         })
     } else {
-        parse_number(text).map(TokenKind::Integer).unwrap_or_else(|| {
-            result
-                .diagnostics
-                .push(invalid_number(text, start, cursor.offset()));
-            TokenKind::Unknown('?')
-        })
+        parse_number(text)
+            .map(TokenKind::Integer)
+            .unwrap_or_else(|| {
+                result
+                    .diagnostics
+                    .push(invalid_number(text, start, cursor.offset()));
+                TokenKind::Unknown('?')
+            })
     };
 
     result.tokens.push(Token {
@@ -315,7 +343,10 @@ mod tests {
         let result = lex("output \"hello\"");
         assert!(result.diagnostics.is_empty());
         assert_eq!(result.tokens[0].kind, TokenKind::Output);
-        assert_eq!(result.tokens[1].kind, TokenKind::String("hello".to_string()));
+        assert_eq!(
+            result.tokens[1].kind,
+            TokenKind::String("hello".to_string())
+        );
     }
 
     #[test]
