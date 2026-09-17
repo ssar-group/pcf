@@ -57,7 +57,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_output_statement(&mut self) -> Option<Item> {
-        let output_token = self.advance();
+        let output_span = self.current()?.span;
+        self.advance();
         let string_token = self.current()?.clone();
 
         match string_token.kind {
@@ -70,13 +71,16 @@ impl<'a> Parser<'a> {
                 Some(Item::Statement(Statement::Output(OutputStatement {
                     value: expression,
                     span: Span {
-                        start: output_token?.span.start,
+                        start: output_span.start,
                         end: string_token.span.end,
                     },
                 })))
             }
             _ => {
-                let output_token = output_token?;
+                let output_token = Token {
+                    kind: TokenKind::Output,
+                    span: output_span,
+                };
                 self.diagnostics
                     .push(expected_output_string(&output_token, &string_token));
                 self.synchronize_output_statement();
