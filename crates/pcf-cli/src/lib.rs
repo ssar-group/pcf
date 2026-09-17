@@ -45,8 +45,10 @@ enum Commands {
 #[derive(Debug, Parser)]
 struct InspectArgs {
     file: PathBuf,
+
     #[arg(long)]
     tokens: bool,
+
     #[arg(long)]
     ast: bool,
 }
@@ -139,10 +141,14 @@ fn parse_command(args: FileArgs) -> Result<ExitStatus> {
     });
     report.blank();
     report.section("Output", |section| match parse_result.program {
-        Some(program) => section.section("AST", |ast| {
-            render_text_lines(ast, format!("{program:#?}"));
-        }),
-        None => section.line("parse failed: no program produced"),
+        Some(program) => {
+            section.section("AST", |ast| {
+                render_text_lines(ast, format!("{program:#?}"));
+            });
+        }
+        None => {
+            section.line("parse failed: no program produced");
+        }
     });
     report.blank();
     report.section("Next", |section| {
@@ -299,11 +305,25 @@ fn render_text_lines(section: &mut ui::SectionBuilder, text: String) {
     }
 }
 
-fn command_parse(path: &Path) -> String { format!("pcf parse {}", path.display()) }
-fn command_check(path: &Path) -> String { format!("pcf check {}", path.display()) }
-fn command_run(path: &Path) -> String { format!("pcf run {}", path.display()) }
-fn command_inspect_tokens(path: &Path) -> String { format!("pcf inspect {} --tokens", path.display()) }
-fn command_inspect_ast(path: &Path) -> String { format!("pcf inspect {} --ast", path.display()) }
+fn command_parse(path: &Path) -> String {
+    format!("pcf parse {}", path.display())
+}
+
+fn command_check(path: &Path) -> String {
+    format!("pcf check {}", path.display())
+}
+
+fn command_run(path: &Path) -> String {
+    format!("pcf run {}", path.display())
+}
+
+fn command_inspect_tokens(path: &Path) -> String {
+    format!("pcf inspect {} --tokens", path.display())
+}
+
+fn command_inspect_ast(path: &Path) -> String {
+    format!("pcf inspect {} --ast", path.display())
+}
 
 fn inspect_state(tokens_selected: bool, ast_selected: bool) -> &'static str {
     match (tokens_selected, ast_selected) {
