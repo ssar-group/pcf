@@ -22,5 +22,7 @@ pub use module::ModuleDeclaration;
 pub use operator::{BinaryOperator, UnaryOperator};
 pub use program::{Item, Program};
 pub use schema::SchemaDeclaration;
-pub use statement::{BlockStatement, ExpressionStatement, OutputStatement, Statement, VariableStatement};
+pub use statement::{
+    BlockStatement, ExpressionStatement, OutputStatement, Statement, VariableStatement,
+};
 pub use types::TypeAnnotation;

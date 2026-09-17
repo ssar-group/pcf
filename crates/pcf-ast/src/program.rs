@@ -1,8 +1,8 @@
 use pcf_span::Span;
 
 use crate::{
-    FunctionDeclaration, ImportDeclaration, ModuleDeclaration, SchemaDeclaration,
-    Statement, VariableDeclaration,
+    FunctionDeclaration, ImportDeclaration, ModuleDeclaration, SchemaDeclaration, Statement,
+    VariableDeclaration,
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]

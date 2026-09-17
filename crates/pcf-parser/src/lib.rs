@@ -10,7 +10,7 @@ mod precedence;
 mod recovery;
 mod statement;
 
-pub use parser::{parse, Parser};
+pub use parser::{Parser, parse};
 
 #[derive(Debug, Clone, Default)]
 pub struct ParseResult {

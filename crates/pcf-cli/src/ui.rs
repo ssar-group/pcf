@@ -217,11 +217,9 @@ fn render_nodes(nodes: &[Node], prefix: &str, rendered: &mut String, min_field_w
             Node::Section { title, items } => {
                 let branch = if is_last { "╰─" } else { "├─" };
                 let _ = writeln!(rendered, "{prefix}{branch} {title}");
-                let next_prefix = if is_last {
-                    format!("{prefix}   ")
-                } else {
-                    format!("{prefix}│  ")
-                };
+                // Keep the vertical continuation bar for child items so hierarchy
+                // remains visible even when the parent is the last sibling.
+                let next_prefix = format!("{prefix}│  ");
                 render_nodes(items, &next_prefix, rendered, SECTION_MIN_FIELD_WIDTH);
             }
         }
@@ -327,17 +325,11 @@ mod tests {
         });
 
         let rendered = report.finish(FooterStatus::Completed, Duration::from_millis(1));
-
-        assert!(rendered.contains("╭─[PCF] PCF v0.1.0"));
-        assert!(rendered.contains("├─ Profile      check"));
-        assert!(rendered.contains("├─ Diagnostics"));
-        assert!(rendered.contains("│  ╰─ Status    clean"));
-        assert!(rendered.contains("├─ Output"));
-        assert!(rendered.contains("│  ╰─ No diagnostics found"));
-        assert!(rendered.contains("╰─ Next"));
-        assert!(rendered.contains("   ├─ inspect   pcf inspect ./example/test/com.pcf --ast"));
-        assert!(rendered.contains("   ╰─ run       pcf run ./example/test/com.pcf"));
-        assert!(rendered.contains("╰─ Completed in 1ms"));
+        // Exact rendering assertion to prevent regressions in output formatting.
+        assert_eq!(
+            rendered,
+            "╭─[PCF] PCF v0.1.0\n│\n├─ Profile      check\n├─ Target       ./example/test/com.pcf\n├─ Module       ./example/test/com.pcf\n├─ State        diagnostics\n│\n├─ Diagnostics\n│  ├─ Errors    0\n│  ├─ Warnings  0\n│  ╰─ Status    clean\n│\n├─ Output\n│  ╰─ No diagnostics found\n│\n╰─ Next\n│  ├─ inspect   pcf inspect ./example/test/com.pcf --ast\n│  ╰─ run       pcf run ./example/test/com.pcf\n╰─ Completed in 1ms\n",
+        );
     }
 
     #[test]

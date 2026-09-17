@@ -30,52 +30,50 @@ impl<'a> Parser<'a> {
         }
 
         let mut items = Vec::new();
-
         self.skip_separators();
         while !self.is_at_end() {
             match self.current_kind() {
-                TokenKind::Output => {
+                Some(TokenKind::Output) => {
                     if let Some(item) = self.parse_output_statement() {
                         items.push(item);
                     }
                 }
-                TokenKind::Eof => break,
-                _ => {
-                    self.diagnostics.push(unexpected_token(self.current()));
+                Some(TokenKind::Eof) | None => break,
+                Some(_) => {
+                    if let Some(token) = self.current() {
+                        self.diagnostics.push(unexpected_token(token));
+                    }
                     self.advance();
                 }
             }
-
             self.skip_separators();
         }
 
         let span = program_span(&items).unwrap_or_default();
         ParseResult {
             program: Some(Program { items, span }),
-            diagnostics: self.diagnostics.clone(),
+            diagnostics: std::mem::take(&mut self.diagnostics),
         }
     }
 
     fn parse_output_statement(&mut self) -> Option<Item> {
-        let output_token = self.advance().clone();
-        let string_token = self.current().clone();
+        let output_token = self.current()?.clone();
+        self.advance();
+        let string_token = self.current()?.clone();
 
         match string_token.kind {
             TokenKind::String(value) => {
                 self.advance();
-                let literal_span = string_token.span;
-                let statement_span = Span {
-                    start: output_token.span.start,
-                    end: string_token.span.end,
-                };
                 let expression = LiteralExpression {
                     value: Literal::String(value),
-                    span: literal_span,
+                    span: string_token.span,
                 };
-
                 Some(Item::Statement(Statement::Output(OutputStatement {
                     value: expression,
-                    span: statement_span,
+                    span: Span {
+                        start: output_token.span.start,
+                        end: string_token.span.end,
+                    },
                 })))
             }
             _ => {
@@ -90,38 +88,39 @@ impl<'a> Parser<'a> {
     fn synchronize_output_statement(&mut self) {
         while !self.is_at_end() {
             match self.current_kind() {
-                TokenKind::Newline
-                | TokenKind::Semicolon
-                | TokenKind::RightBrace
-                | TokenKind::Eof => break,
-                _ => {
-                    self.advance();
-                }
+                Some(
+                    TokenKind::Newline
+                    | TokenKind::Semicolon
+                    | TokenKind::RightBrace
+                    | TokenKind::Eof,
+                )
+                | None => break,
+                Some(_) => self.advance(),
             }
         }
     }
 
-    fn current(&self) -> &Token {
-        &self.tokens[self.position]
+    fn current(&self) -> Option<&Token> {
+        self.tokens.get(self.position)
     }
 
-    fn current_kind(&self) -> &TokenKind {
-        &self.current().kind
+    fn current_kind(&self) -> Option<&TokenKind> {
+        self.current().map(|token| &token.kind)
     }
 
     fn is_at_end(&self) -> bool {
-        matches!(self.current_kind(), TokenKind::Eof)
+        self.position >= self.tokens.len() || matches!(self.current_kind(), Some(TokenKind::Eof))
     }
 
-    fn advance(&mut self) -> &Token {
-        if !self.is_at_end() {
-            self.position += 1;
-        }
-        &self.tokens[self.position.saturating_sub(1)]
+    fn advance(&mut self) {
+        self.position = self.position.saturating_add(1).min(self.tokens.len());
     }
 
     fn skip_separators(&mut self) {
-        while matches!(self.current_kind(), TokenKind::Newline | TokenKind::Semicolon) {
+        while matches!(
+            self.current_kind(),
+            Some(TokenKind::Newline | TokenKind::Semicolon)
+        ) {
             self.advance();
         }
     }
@@ -134,11 +133,10 @@ pub fn parse(tokens: &[Token]) -> ParseResult {
 fn program_span(items: &[Item]) -> Option<Span> {
     let first = items.first()?;
     let last = items.last()?;
-
-    let start = item_span(first).start;
-    let end = item_span(last).end;
-
-    Some(Span { start, end })
+    Some(Span {
+        start: item_span(first).start,
+        end: item_span(last).end,
+    })
 }
 
 fn item_span(item: &Item) -> Span {
@@ -176,7 +174,6 @@ fn expected_output_string(output_token: &Token, token: &Token) -> Diagnostic {
     } else {
         token.span
     };
-
     Diagnostic {
         severity: Severity::Error,
         code: DiagnosticCode("PCF1001"),
@@ -186,7 +183,10 @@ fn expected_output_string(output_token: &Token, token: &Token) -> Diagnostic {
             message: Some("only string literals are supported".to_string()),
             primary: true,
         }],
-        notes: vec!["`output` is a static statement and does not execute runtime expressions yet".to_string()],
+        notes: vec![
+            "`output` is a static statement and does not execute runtime expressions yet"
+                .to_string(),
+        ],
     }
 }
 
@@ -199,21 +199,23 @@ mod tests {
     fn parses_output_statements_in_order() {
         let result = parse(&lex("output \"hello\"\noutput \"world\"\n").tokens);
         assert!(result.diagnostics.is_empty());
-
         let program = result.program.expect("program");
         assert_eq!(program.items.len(), 2);
-
-        let first = match &program.items[0] {
-            Item::Statement(Statement::Output(statement)) => statement,
-            other => panic!("unexpected item: {other:?}"),
-        };
-        let second = match &program.items[1] {
-            Item::Statement(Statement::Output(statement)) => statement,
-            other => panic!("unexpected item: {other:?}"),
-        };
-
-        assert_eq!(first.value.value, Literal::String("hello".to_string()));
-        assert_eq!(second.value.value, Literal::String("world".to_string()));
+        let values: Vec<_> = program
+            .items
+            .iter()
+            .map(|item| match item {
+                Item::Statement(Statement::Output(statement)) => statement.value.value.clone(),
+                other => panic!("unexpected item: {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            values,
+            vec![
+                Literal::String("hello".to_string()),
+                Literal::String("world".to_string())
+            ]
+        );
     }
 
     #[test]
@@ -227,10 +229,13 @@ mod tests {
     fn reports_non_string_output_value() {
         let result = parse(&lex("output 42\n").tokens);
         assert_eq!(result.diagnostics.len(), 1);
-        assert!(result
-            .diagnostics
-            .first()
-            .map(|diagnostic| diagnostic.message.as_str())
-            .is_some_and(|message| message.contains("string literal")));
+        assert!(result.diagnostics[0].message.contains("string literal"));
+    }
+
+    #[test]
+    fn accepts_empty_token_input() {
+        let result = parse(&[]);
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(result.program.expect("program").items.len(), 0);
     }
 }

@@ -29,16 +29,7 @@ pub fn lex(source: &str) -> LexResult {
             c if c.is_whitespace() && c != '\n' => {
                 let _ = cursor.advance();
             }
-            '\n' => {
-                let _ = cursor.advance();
-                result.tokens.push(Token {
-                    kind: TokenKind::Newline,
-                    span: Span {
-                        start,
-                        end: cursor.offset(),
-                    },
-                });
-            }
+            '\n' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Newline),
             '/' if cursor.peek_next() == Some('/') => {
                 let _ = cursor.advance();
                 let _ = cursor.advance();
@@ -55,14 +46,8 @@ pub fn lex(source: &str) -> LexResult {
                     result.diagnostics.push(diagnostic);
                 }
             }
-            c if c.is_ascii_digit() => {
-                let token = lex_number(&mut cursor, start, source);
-                result.tokens.push(token);
-            }
-            c if is_identifier_start(c) => {
-                let token = lex_identifier(&mut cursor, start);
-                result.tokens.push(token);
-            }
+            c if c.is_ascii_digit() => lex_number(&mut cursor, start, source, &mut result),
+            c if is_identifier_start(c) => result.tokens.push(lex_identifier(&mut cursor, start)),
             '{' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::LeftBrace),
             '}' => push_single(
                 &mut result.tokens,
@@ -149,7 +134,6 @@ pub fn lex(source: &str) -> LexResult {
             end: source.len(),
         },
     });
-
     result
 }
 
@@ -178,9 +162,8 @@ fn push_double(tokens: &mut Vec<Token>, cursor: &mut Cursor<'_>, start: usize, k
 
 fn lex_identifier(cursor: &mut Cursor<'_>, start: usize) -> Token {
     let ident = cursor.consume_while(is_identifier_continue);
-    let kind = keyword_kind(ident).unwrap_or_else(|| TokenKind::Identifier(ident.to_string()));
     Token {
-        kind,
+        kind: keyword_kind(ident).unwrap_or_else(|| TokenKind::Identifier(ident.to_string())),
         span: Span {
             start,
             end: cursor.offset(),
@@ -188,7 +171,7 @@ fn lex_identifier(cursor: &mut Cursor<'_>, start: usize) -> Token {
     }
 }
 
-fn lex_number(cursor: &mut Cursor<'_>, start: usize, source: &str) -> Token {
+fn lex_number(cursor: &mut Cursor<'_>, start: usize, source: &str, result: &mut LexResult) {
     let mut is_float = false;
     let _ = cursor.consume_while(|c| c.is_ascii_digit());
     if cursor.peek() == Some('.') && cursor.peek_next().is_some_and(|c| c.is_ascii_digit()) {
@@ -196,23 +179,33 @@ fn lex_number(cursor: &mut Cursor<'_>, start: usize, source: &str) -> Token {
         let _ = cursor.advance();
         let _ = cursor.consume_while(|c| c.is_ascii_digit());
     }
+
     let text = &source[start..cursor.offset()];
     let kind = if is_float {
-        parse_float(text)
-            .map(TokenKind::Float)
-            .unwrap_or_else(|| TokenKind::Unknown('?'))
+        parse_float(text).map(TokenKind::Float).unwrap_or_else(|| {
+            result
+                .diagnostics
+                .push(invalid_number(text, start, cursor.offset()));
+            TokenKind::Unknown('?')
+        })
     } else {
         parse_number(text)
             .map(TokenKind::Integer)
-            .unwrap_or_else(|| TokenKind::Unknown('?'))
+            .unwrap_or_else(|| {
+                result
+                    .diagnostics
+                    .push(invalid_number(text, start, cursor.offset()));
+                TokenKind::Unknown('?')
+            })
     };
-    Token {
+
+    result.tokens.push(Token {
         kind,
         span: Span {
             start,
             end: cursor.offset(),
         },
-    }
+    });
 }
 
 fn lex_string(cursor: &mut Cursor<'_>, start: usize) -> (Token, Option<Diagnostic>) {
@@ -310,6 +303,20 @@ fn invalid_character(ch: char, start: usize, end: usize) -> Diagnostic {
     }
 }
 
+fn invalid_number(text: &str, start: usize, end: usize) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code: DiagnosticCode("PCF0004"),
+        message: format!("invalid numeric literal `{text}`"),
+        labels: vec![Label {
+            span: Span { start, end },
+            message: Some("numeric literal is outside the supported range".to_string()),
+            primary: true,
+        }],
+        notes: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,7 +343,10 @@ mod tests {
         let result = lex("output \"hello\"");
         assert!(result.diagnostics.is_empty());
         assert_eq!(result.tokens[0].kind, TokenKind::Output);
-        assert_eq!(result.tokens[1].kind, TokenKind::String("hello".to_string()));
+        assert_eq!(
+            result.tokens[1].kind,
+            TokenKind::String("hello".to_string())
+        );
     }
 
     #[test]
@@ -344,5 +354,12 @@ mod tests {
         let result = lex("@");
         assert_eq!(result.diagnostics.len(), 1);
         assert_eq!(result.tokens[0].kind, TokenKind::Unknown('@'));
+    }
+
+    #[test]
+    fn reports_integer_overflow() {
+        let result = lex("999999999999999999999999999999999999999");
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].code, DiagnosticCode("PCF0004"));
     }
 }
