@@ -1,6 +1,10 @@
 mod ui;
 
-use std::{fs, path::{Path, PathBuf}, time::Instant};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -9,15 +13,26 @@ use pcf::{self, diagnostics::Diagnostic, lexer, parser};
 use crate::ui::FooterStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExitStatus { Success, Failure }
+pub enum ExitStatus {
+    Success,
+    Failure,
+}
 
 impl ExitStatus {
-    pub fn code(self) -> i32 { match self { Self::Success => 0, Self::Failure => 1 } }
+    pub fn code(self) -> i32 {
+        match self {
+            Self::Success => 0,
+            Self::Failure => 1,
+        }
+    }
 }
 
 #[derive(Debug, Parser)]
 #[command(name = "pcf", version, about = "PCF command-line interface")]
-struct Cli { #[command(subcommand)] command: Commands }
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
 
 #[derive(Debug, Subcommand)]
 enum Commands {
@@ -30,12 +45,16 @@ enum Commands {
 #[derive(Debug, Parser)]
 struct InspectArgs {
     file: PathBuf,
-    #[arg(long)] tokens: bool,
-    #[arg(long)] ast: bool,
+    #[arg(long)]
+    tokens: bool,
+    #[arg(long)]
+    ast: bool,
 }
 
 #[derive(Debug, Parser)]
-struct FileArgs { file: PathBuf }
+struct FileArgs {
+    file: PathBuf,
+}
 
 pub fn run() -> Result<ExitStatus> {
     match Cli::parse().command {
@@ -55,7 +74,11 @@ fn inspect(args: InspectArgs) -> Result<ExitStatus> {
     let ast_selected = args.ast;
     let file_display = args.file.display().to_string();
 
-    let mut report = new_report("inspect", &file_display, inspect_state(tokens_selected, ast_selected));
+    let mut report = new_report(
+        "inspect",
+        &file_display,
+        inspect_state(tokens_selected, ast_selected),
+    );
     report.section("Diagnostics", |section| {
         let mut diagnostics = lex_result.diagnostics.clone();
         diagnostics.extend(parse_result.diagnostics.clone());
@@ -72,18 +95,16 @@ fn inspect(args: InspectArgs) -> Result<ExitStatus> {
                 section.blank();
             }
 
-            section.section("AST", |ast| {
-                match parse_result.program {
-                    Some(program) if parse_result.diagnostics.is_empty() => {
-                        render_text_lines(ast, format!("{program:#?}"));
-                    }
-                    Some(program) => {
-                        render_text_lines(ast, format!("{program:#?}"));
-                        ast.line("parse completed with diagnostics");
-                    }
-                    None => {
-                        ast.line("parse failed: no program produced");
-                    }
+            section.section("AST", |ast| match parse_result.program {
+                Some(program) if parse_result.diagnostics.is_empty() => {
+                    render_text_lines(ast, format!("{program:#?}"));
+                }
+                Some(program) => {
+                    render_text_lines(ast, format!("{program:#?}"));
+                    ast.line("parse completed with diagnostics");
+                }
+                None => {
+                    ast.line("parse failed: no program produced");
                 }
             });
         }
@@ -117,17 +138,11 @@ fn parse_command(args: FileArgs) -> Result<ExitStatus> {
         render_diagnostic_summary(section, &diagnostics);
     });
     report.blank();
-    report.section("Output", |section| {
-        match parse_result.program {
-            Some(program) => {
-                section.section("AST", |ast| {
-                    render_text_lines(ast, format!("{program:#?}"));
-                });
-            }
-            None => {
-                section.line("parse failed: no program produced");
-            }
-        }
+    report.section("Output", |section| match parse_result.program {
+        Some(program) => section.section("AST", |ast| {
+            render_text_lines(ast, format!("{program:#?}"));
+        }),
+        None => section.line("parse failed: no program produced"),
     });
     report.blank();
     report.section("Next", |section| {
@@ -159,7 +174,9 @@ fn check_command(args: FileArgs) -> Result<ExitStatus> {
         }
     });
     report.blank();
-    report.section("Content", |section| render_check_content(section, &check_result.outputs));
+    report.section("Content", |section| {
+        render_check_content(section, &check_result.outputs)
+    });
     report.blank();
     report.section("Next", |section| {
         section.command("inspect", command_inspect_ast(&args.file));
@@ -183,12 +200,19 @@ fn run_command(args: FileArgs) -> Result<ExitStatus> {
 
     let (output_lines, exit_status) = match pcf::execute(&source) {
         Ok(value) => (vec![format!("{value:#?}")], ExitStatus::Success),
-        Err(error) => (vec![format!("execution failed: {}", error.message)], ExitStatus::Failure),
+        Err(error) => (
+            vec![format!("execution failed: {}", error.message)],
+            ExitStatus::Failure,
+        ),
     };
 
-    report.section("Diagnostics", |section| render_diagnostic_summary(section, &[]));
+    report.section("Diagnostics", |section| {
+        render_diagnostic_summary(section, &[])
+    });
     report.blank();
-    report.section("Output", |section| render_text_lines(section, output_lines.join("\n")));
+    report.section("Output", |section| {
+        render_text_lines(section, output_lines.join("\n"))
+    });
     report.blank();
     report.section("Next", |section| {
         section.command("inspect", command_inspect_tokens(&args.file));
@@ -214,18 +238,31 @@ fn new_report(profile: &str, target: &str, state: &str) -> ui::TerminalReport {
 }
 
 fn has_errors(diagnostics: &[Diagnostic]) -> bool {
-    diagnostics.iter().any(|diagnostic| matches!(diagnostic.severity, pcf::diagnostics::Severity::Error))
+    diagnostics
+        .iter()
+        .any(|diagnostic| matches!(diagnostic.severity, pcf::diagnostics::Severity::Error))
 }
 
 fn render_diagnostic_summary(section: &mut ui::SectionBuilder, diagnostics: &[Diagnostic]) {
-    let errors = diagnostics.iter().filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Error)).count();
-    let warnings = diagnostics.iter().filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Warning)).count();
+    let errors = diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Error))
+        .count();
+    let warnings = diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Warning))
+        .count();
     section.field("Errors", errors.to_string());
     section.field("Warnings", warnings.to_string());
     section.field("Status", ui::diagnostic_status(errors, warnings));
 }
 
-fn render_diagnostic_output(section: &mut ui::SectionBuilder, diagnostics: &[Diagnostic], file: &Path, source: &str) {
+fn render_diagnostic_output(
+    section: &mut ui::SectionBuilder,
+    diagnostics: &[Diagnostic],
+    file: &Path,
+    source: &str,
+) {
     for (index, diagnostic) in diagnostics.iter().enumerate() {
         section.section(ui::format_diagnostic_title(diagnostic), |entry| {
             ui::render_diagnostic_labels(entry, diagnostic, file, source);
@@ -284,7 +321,9 @@ fn footer_status(status: ExitStatus) -> FooterStatus {
     }
 }
 
-fn print_output(text: String) { println!("{text}"); }
+fn print_output(text: String) {
+    println!("{text}");
+}
 
 #[cfg(test)]
 mod tests {
@@ -294,7 +333,12 @@ mod tests {
     fn reports_errors_from_parse_diagnostics() {
         let source = lexer::lex("unknown\n");
         let parse_result = parser::parse(&source.tokens);
-        assert!(!source.diagnostics.iter().chain(parse_result.diagnostics.iter()).collect::<Vec<_>>().is_empty());
+        assert!(!source
+            .diagnostics
+            .iter()
+            .chain(parse_result.diagnostics.iter())
+            .collect::<Vec<_>>()
+            .is_empty());
         assert!(has_errors(&parse_result.diagnostics));
     }
 
@@ -302,12 +346,22 @@ mod tests {
     fn renders_static_output_content() {
         let mut report = ui::TerminalReport::new("PCF", "0.1.0");
         report.section("Content", |section| {
-            render_check_content(section, &[
-                pcf::CheckOutput { content: "hello".to_string(), span: pcf_span::Span { start: 0, end: 5 } },
-                pcf::CheckOutput { content: "world".to_string(), span: pcf_span::Span { start: 6, end: 11 } },
-            ]);
+            render_check_content(
+                section,
+                &[
+                    pcf::CheckOutput {
+                        content: "hello".to_string(),
+                        span: pcf_span::Span { start: 0, end: 5 },
+                    },
+                    pcf::CheckOutput {
+                        content: "world".to_string(),
+                        span: pcf_span::Span { start: 6, end: 11 },
+                    },
+                ],
+            );
         });
-        let rendered = report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
+        let rendered =
+            report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
         assert!(rendered.contains("├─ Content"));
         assert!(rendered.contains("│  ╰─ Output"));
         assert!(rendered.contains("   ├─ hello"));
