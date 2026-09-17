@@ -117,11 +117,12 @@ fn inspect(args: InspectArgs) -> Result<ExitStatus> {
         section.command("check", command_check(&args.file));
     });
 
-    let exit_status = if has_errors(&lex_result.diagnostics) || has_errors(&parse_result.diagnostics) {
-        ExitStatus::Failure
-    } else {
-        ExitStatus::Success
-    };
+    let exit_status =
+        if has_errors(&lex_result.diagnostics) || has_errors(&parse_result.diagnostics) {
+            ExitStatus::Failure
+        } else {
+            ExitStatus::Success
+        };
     print_output(report.finish(footer_status(exit_status), started.elapsed()));
     Ok(exit_status)
 }
@@ -380,8 +381,7 @@ mod tests {
                 ],
             );
         });
-        let rendered =
-            report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
+        let rendered = report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
         assert!(rendered.contains("├─ Content"));
         assert!(rendered.contains("│  ╰─ Output"));
         assert!(rendered.contains("   ├─ hello"));
