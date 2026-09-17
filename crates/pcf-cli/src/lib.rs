@@ -376,13 +376,11 @@ mod tests {
                 ],
             );
         });
-        let rendered = report.finish(
-            FooterStatus::Completed,
-            std::time::Duration::from_millis(1),
+        let rendered = report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
+        // Exact rendering assertion to prevent regressions in output formatting.
+        assert_eq!(
+            rendered,
+            "╭─[PCF] PCF v0.1.0\n│\n╰─ Content\n│  ╰─ Output\n│  │  ├─ hello\n│  │  ╰─ world\n╰─ Completed in 1ms\n",
         );
-        assert!(rendered.contains("╰─ Content"));
-        assert!(rendered.contains("│  ╰─ Output"));
-        assert!(rendered.contains("   ├─ hello"));
-        assert!(rendered.contains("   ╰─ world"));
     }
 }
