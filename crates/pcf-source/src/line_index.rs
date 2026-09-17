@@ -1,5 +1,6 @@
 #[derive(Debug, Clone, Default)]
 pub struct LineIndex {
+    #[allow(dead_code)]
     line_starts: Vec<usize>,
 }
 
