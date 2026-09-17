@@ -1,9 +1,1 @@
-#![allow(dead_code)]
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExpressionKind {
-    Literal,
-    Identifier,
-    Binary,
-    Unary,
-}
+// Placeholder expression enum removed from the active parser surface.

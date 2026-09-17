@@ -1,4 +1,1 @@
-#![allow(dead_code)]
-
-#[derive(Debug, Clone, Default)]
-pub struct ArrayParser;
+// Placeholder array parser removed from the active parser surface.

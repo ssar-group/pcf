@@ -1,6 +1,1 @@
-#![allow(dead_code)]
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseError {
-    pub message: String,
-}
+// Deprecated parser error abstraction. Use pcf_diagnostics::Diagnostic instead.
