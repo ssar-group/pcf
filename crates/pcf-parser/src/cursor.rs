@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use pcf_token::Token;
 
 #[derive(Debug)]
