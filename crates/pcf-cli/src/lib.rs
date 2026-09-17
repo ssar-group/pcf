@@ -117,12 +117,11 @@ fn inspect(args: InspectArgs) -> Result<ExitStatus> {
         section.command("check", command_check(&args.file));
     });
 
-    let exit_status =
-        if has_errors(&lex_result.diagnostics) || has_errors(&parse_result.diagnostics) {
-            ExitStatus::Failure
-        } else {
-            ExitStatus::Success
-        };
+    let exit_status = if has_errors(&lex_result.diagnostics) || has_errors(&parse_result.diagnostics) {
+        ExitStatus::Failure
+    } else {
+        ExitStatus::Success
+    };
     print_output(report.finish(footer_status(exit_status), started.elapsed()));
     Ok(exit_status)
 }
@@ -354,12 +353,7 @@ mod tests {
     fn reports_errors_from_parse_diagnostics() {
         let source = lexer::lex("unknown\n");
         let parse_result = parser::parse(&source.tokens);
-        assert!(!source
-            .diagnostics
-            .iter()
-            .chain(parse_result.diagnostics.iter())
-            .collect::<Vec<_>>()
-            .is_empty());
+        assert!(!source.diagnostics.is_empty() || !parse_result.diagnostics.is_empty());
         assert!(has_errors(&parse_result.diagnostics));
     }
 
