@@ -376,8 +376,11 @@ mod tests {
                 ],
             );
         });
-        let rendered = report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
-        assert!(rendered.contains("├─ Content"));
+        let rendered = report.finish(
+            FooterStatus::Completed,
+            std::time::Duration::from_millis(1),
+        );
+        assert!(rendered.contains("╰─ Content"));
         assert!(rendered.contains("│  ╰─ Output"));
         assert!(rendered.contains("   ├─ hello"));
         assert!(rendered.contains("   ╰─ world"));
