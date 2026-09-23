@@ -5,6 +5,7 @@ use pcf_token::{Token, TokenKind};
 
 use crate::{ParseResult, cursor::Cursor, recovery::RecoveryState};
 
+/// Parser for converting a token stream into a PCF AST.
 #[derive(Debug)]
 pub struct Parser<'a> {
     cursor: Cursor<'a>,
@@ -13,6 +14,8 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Creates a parser for a token slice.
+    #[must_use]
     pub fn new(tokens: &'a [Token]) -> Self {
         Self {
             cursor: Cursor::new(tokens),
@@ -21,6 +24,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses the current token stream into a program.
     pub fn parse_program(&mut self) -> ParseResult {
         if self.cursor.current().is_none() {
             return ParseResult {
@@ -39,11 +43,7 @@ impl<'a> Parser<'a> {
             self.skip_separators();
         }
 
-        let span = if let Some(program_span) = program_span(&items) {
-            program_span
-        } else {
-            Span::default()
-        };
+        let span = program_span(&items).unwrap_or_default();
 
         ParseResult {
             program: Some(Program { items, span }),
@@ -66,10 +66,8 @@ impl<'a> Parser<'a> {
 
     fn parse_output_statement(&mut self) -> Option<Item> {
         let output_token = self.current()?.clone();
-        let output_consumed = self.expect(TokenKind::Output);
-        let _ = self.previous();
-
-        if output_consumed.is_none() {
+        if self.expect(&TokenKind::Output).is_none() {
+            self.diagnostics.push(unexpected_token(&output_token));
             return None;
         }
 
@@ -87,35 +85,32 @@ impl<'a> Parser<'a> {
             self.recover_statement();
             return None;
         }
-        match value_token {
-            Some(token) => match token.kind {
-                TokenKind::String(value) => {
-                    self.advance();
-                    let expression = LiteralExpression {
-                        value: Literal::String(value.clone()),
-                        span: token.span,
-                    };
-                    Some(Item::Statement(Statement::Output(OutputStatement {
-                        value: expression,
-                        span: Span {
-                            start: output_token.span.start,
-                            end: token.span.end,
-                        },
-                    })))
-                }
-                _ => {
-                    self.diagnostics
-                        .push(expected_output_string(&output_token, Some(&token)));
-                    self.recover_statement();
-                    None
-                }
-            },
-            None => {
+
+        if let Some(token) = value_token {
+            if let TokenKind::String(value) = token.kind {
+                self.advance();
+                let expression = LiteralExpression {
+                    value: Literal::String(value.clone()),
+                    span: token.span,
+                };
+                Some(Item::Statement(Statement::Output(OutputStatement {
+                    value: expression,
+                    span: Span {
+                        start: output_token.span.start,
+                        end: token.span.end,
+                    },
+                })))
+            } else {
                 self.diagnostics
-                    .push(expected_output_string(&output_token, None));
+                    .push(expected_output_string(&output_token, Some(&token)));
                 self.recover_statement();
                 None
             }
+        } else {
+            self.diagnostics
+                .push(expected_output_string(&output_token, None));
+            self.recover_statement();
+            None
         }
     }
 
@@ -147,10 +142,6 @@ impl<'a> Parser<'a> {
         self.cursor.current_kind()
     }
 
-    fn previous(&self) -> Option<Token> {
-        self.cursor.previous()
-    }
-
     fn peek(&self, offset: usize) -> Option<&Token> {
         self.cursor.peek(offset)
     }
@@ -167,8 +158,8 @@ impl<'a> Parser<'a> {
         self.cursor.matches(kinds)
     }
 
-    fn expect(&mut self, kind: TokenKind) -> Option<Token> {
-        if self.check(&kind) {
+    fn expect(&mut self, kind: &TokenKind) -> Option<Token> {
+        if self.check(kind) {
             self.advance()
         } else {
             None
@@ -194,6 +185,8 @@ impl<'a> Parser<'a> {
     }
 }
 
+/** Parses a slice of tokens into a program and diagnostics collection */
+#[must_use]
 pub fn parse(tokens: &[Token]) -> ParseResult {
     let mut parser = Parser::new(tokens);
     parser.parse_program()
@@ -238,7 +231,7 @@ fn unexpected_token(token: &Token) -> Diagnostic {
 }
 
 fn expected_output_string(output_token: &Token, token: Option<&Token>) -> Diagnostic {
-    let span = token.map(|token| token.span).unwrap_or(output_token.span);
+    let span = token.map_or(output_token.span, |token| token.span);
     Diagnostic {
         severity: Severity::Error,
         code: DiagnosticCode("PCF1001"),

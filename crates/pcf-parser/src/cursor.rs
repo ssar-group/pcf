@@ -22,11 +22,6 @@ impl<'a> Cursor<'a> {
         self.current().map(|token| token.kind.clone())
     }
 
-    pub fn previous(&self) -> Option<Token> {
-        let previous_index = self.position.checked_sub(1)?;
-        self.tokens.get(previous_index).cloned()
-    }
-
     pub fn peek(&self, offset: usize) -> Option<&Token> {
         self.tokens.get(self.position.saturating_add(offset))
     }
