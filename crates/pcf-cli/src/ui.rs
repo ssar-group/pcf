@@ -230,11 +230,11 @@ pub fn render_diagnostic_labels(
     for label in labels {
         let location = format_label(file, source, label);
         section.line(location);
-        if !source.is_empty() {
-            if let Some(excerpt) = render_label_excerpt(source, label) {
-                for line in excerpt {
-                    section.line(line);
-                }
+        if !source.is_empty()
+            && let Some(excerpt) = render_label_excerpt(source, label)
+        {
+            for line in excerpt {
+                section.line(line);
             }
         }
     }
@@ -258,10 +258,8 @@ pub fn render_diagnostic(diagnostic: &Diagnostic, file: &Path, source: &str) -> 
     for label in labels {
         let location = format_label(file, source, label);
         output.push(location);
-        if !source.is_empty() {
-            if let Some(excerpt) = render_label_excerpt(source, label) {
-                output.extend(excerpt);
-            }
+        if !source.is_empty() && let Some(excerpt) = render_label_excerpt(source, label) {
+            output.extend(excerpt);
         }
     }
 
@@ -324,9 +322,7 @@ pub fn format_label(file: &Path, source: &str, label: &Label) -> String {
 fn render_label_excerpt(source: &str, label: &Label) -> Option<Vec<String>> {
     let start = label.span.start.min(source.len());
     let end = label.span.end.min(source.len());
-    let Some((line_no, line_text)) = line_for_offset(source, start) else {
-        return None;
-    };
+    let (line_no, line_text) = line_for_offset(source, start)?;
     let start_column = display_column_for_offset(source, start);
     let span_width = display_width_of_span(source, start, end).max(1);
     let marker = if label.primary { '^' } else { '~' };
