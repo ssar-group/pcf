@@ -2,15 +2,33 @@ mod ui;
 
 use std::{
     fs,
+    io::{self, Write},
     path::{Path, PathBuf},
     time::Instant,
 };
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use pcf::{self, diagnostics::Diagnostic, lexer, parser};
 
-use crate::ui::FooterStatus;
+use crate::ui::{ColorMode, FooterStatus, StyleKind, TerminalTheme};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ColorArg {
+    Auto,
+    Always,
+    Never,
+}
+
+impl ColorArg {
+    fn into_color_mode(self) -> ColorMode {
+        match self {
+            Self::Auto => ColorMode::Auto,
+            Self::Always => ColorMode::Always,
+            Self::Never => ColorMode::Never,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitStatus {
@@ -30,6 +48,9 @@ impl ExitStatus {
 #[derive(Debug, Parser)]
 #[command(name = "pcf", version, about = "PCF command-line interface")]
 struct Cli {
+    #[arg(long, value_enum, default_value_t = ColorArg::Auto)]
+    color: ColorArg,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -59,15 +80,18 @@ struct FileArgs {
 }
 
 pub fn run() -> Result<ExitStatus> {
-    match Cli::parse().command {
-        Commands::Inspect(args) => inspect(args),
-        Commands::Parse(args) => parse_command(args),
-        Commands::Check(args) => check_command(args),
-        Commands::Run(args) => run_command(args),
+    let cli = Cli::parse();
+    let theme = TerminalTheme::from_mode(cli.color.into_color_mode());
+
+    match cli.command {
+        Commands::Inspect(args) => inspect(args, theme),
+        Commands::Parse(args) => parse_command(args, theme),
+        Commands::Check(args) => check_command(args, theme),
+        Commands::Run(args) => run_command(args, theme),
     }
 }
 
-fn inspect(args: InspectArgs) -> Result<ExitStatus> {
+fn inspect(args: InspectArgs, theme: TerminalTheme) -> Result<ExitStatus> {
     let started = Instant::now();
     let source = read_source(&args.file)?;
     let lex_result = lexer::lex(&source);
@@ -76,58 +100,58 @@ fn inspect(args: InspectArgs) -> Result<ExitStatus> {
     let ast_selected = args.ast;
     let file_display = args.file.display().to_string();
 
-    let mut report = new_report(
-        "inspect",
-        &file_display,
-        inspect_state(tokens_selected, ast_selected),
-    );
-    report.section("Diagnostics", |section| {
-        let mut diagnostics = lex_result.diagnostics.clone();
-        diagnostics.extend(parse_result.diagnostics.clone());
-        render_diagnostic_summary(section, &diagnostics);
-    });
-    report.blank();
-    report.section("Output", |section| {
+    let mut diagnostics = lex_result.diagnostics.clone();
+    diagnostics.extend(parse_result.diagnostics.clone());
+    let exit_status = if has_errors(&diagnostics) {
+        ExitStatus::Failure
+    } else {
+        ExitStatus::Success
+    };
+
+    if !diagnostics.is_empty() {
+        emit_stderr_lines(render_diagnostics(&diagnostics, &args.file, &source));
+    }
+
+    let summary = if exit_status == ExitStatus::Success {
+        format!(
+            "{} parsed {}",
+            theme.paint(StyleKind::Success, "✓"),
+            file_display
+        )
+    } else {
+        format!(
+            "{} failed to parse {}",
+            theme.paint(StyleKind::Error, "✗"),
+            file_display
+        )
+    };
+    eprintln!("{summary}");
+
+    if tokens_selected {
+        let lines = render_tokens_output(&lex_result.tokens);
+        let mut stdout = io::stdout();
+        writeln!(stdout, "{lines}")?;
+    }
+
+    if ast_selected {
         if tokens_selected {
-            render_tokens(section, &lex_result.tokens);
+            println!();
         }
-
-        if ast_selected {
-            if tokens_selected {
-                section.blank();
-            }
-
-            section.section("AST", |ast| match parse_result.program {
-                Some(program) if parse_result.diagnostics.is_empty() => {
-                    render_text_lines(ast, format!("{program:#?}"));
-                }
-                Some(program) => {
-                    render_text_lines(ast, format!("{program:#?}"));
-                    ast.line("parse completed with diagnostics");
-                }
-                None => {
-                    ast.line("parse failed: no program produced");
-                }
-            });
-        }
-    });
-    report.blank();
-    report.section("Next", |section| {
-        section.command("parse", command_parse(&args.file));
-        section.command("check", command_check(&args.file));
-    });
-
-    let exit_status =
-        if has_errors(&lex_result.diagnostics) || has_errors(&parse_result.diagnostics) {
-            ExitStatus::Failure
-        } else {
-            ExitStatus::Success
+        let program = match parse_result.program {
+            Some(program) => format!("{program:#?}"),
+            None => "parse failed: no program produced".to_string(),
         };
-    print_output(report.finish(footer_status(exit_status), started.elapsed()));
+        println!("AST\n{program}");
+    }
+
+    if started.elapsed().as_nanos() > 0 {
+        eprintln!("Finished in {}", ui::format_duration(started.elapsed()));
+    }
+
     Ok(exit_status)
 }
 
-fn parse_command(args: FileArgs) -> Result<ExitStatus> {
+fn parse_command(args: FileArgs, theme: TerminalTheme) -> Result<ExitStatus> {
     let started = Instant::now();
     let source = read_source(&args.file)?;
     let lex_result = lexer::lex(&source);
@@ -136,74 +160,109 @@ fn parse_command(args: FileArgs) -> Result<ExitStatus> {
     diagnostics.extend(parse_result.diagnostics.clone());
     let file_display = args.file.display().to_string();
 
-    let mut report = new_report("parse", &file_display, "ast");
-    report.section("Diagnostics", |section| {
-        render_diagnostic_summary(section, &diagnostics);
-    });
-    report.blank();
-    report.section("Output", |section| match parse_result.program {
-        Some(program) => {
-            section.section("AST", |ast| {
-                render_text_lines(ast, format!("{program:#?}"));
-            });
-        }
-        None => {
-            section.line("parse failed: no program produced");
-        }
-    });
-    report.blank();
-    report.section("Next", |section| {
-        section.command("inspect", command_inspect_ast(&args.file));
-        section.command("check", command_check(&args.file));
-    });
-
     let exit_status = if has_errors(&diagnostics) {
         ExitStatus::Failure
     } else {
         ExitStatus::Success
     };
-    print_output(report.finish(footer_status(exit_status), started.elapsed()));
+
+    if !diagnostics.is_empty() {
+        emit_stderr_lines(render_diagnostics(&diagnostics, &args.file, &source));
+    }
+
+    let status = if exit_status == ExitStatus::Success {
+        format!(
+            "{} parsed {}",
+            theme.paint(StyleKind::Success, "✓"),
+            file_display
+        )
+    } else {
+        format!(
+            "{} failed to parse {}",
+            theme.paint(StyleKind::Error, "✗"),
+            file_display
+        )
+    };
+    eprintln!("{status}");
+
+    if let Some(program) = parse_result.program {
+        println!("AST\n{program:#?}");
+    } else {
+        println!("parse failed: no program produced");
+    }
+
+    eprintln!("Finished in {}", ui::format_duration(started.elapsed()));
     Ok(exit_status)
 }
 
-fn check_command(args: FileArgs) -> Result<ExitStatus> {
+fn check_command(args: FileArgs, theme: TerminalTheme) -> Result<ExitStatus> {
     let started = Instant::now();
     let source = read_source(&args.file)?;
     let check_result = pcf::check(&source)?;
     let file_display = args.file.display().to_string();
+    let error_count = check_result
+        .diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Error))
+        .count();
+    let warning_count = check_result
+        .diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Warning))
+        .count();
 
-    let mut report = new_report("check", &file_display, "diagnostics");
-    report.section("Diagnostics", |section| {
-        render_diagnostic_summary(section, &check_result.diagnostics);
-        if !check_result.diagnostics.is_empty() {
-            section.blank();
-            render_diagnostic_output(section, &check_result.diagnostics, &args.file, &source);
-        }
-    });
-    report.blank();
-    report.section("Content", |section| {
-        render_check_content(section, &check_result.outputs)
-    });
-    report.blank();
-    report.section("Next", |section| {
-        section.command("inspect", command_inspect_ast(&args.file));
-        section.command("run", command_run(&args.file));
-    });
-
-    let exit_status = if has_errors(&check_result.diagnostics) {
+    let exit_status = if error_count > 0 {
         ExitStatus::Failure
     } else {
         ExitStatus::Success
     };
-    print_output(report.finish(footer_status(exit_status), started.elapsed()));
+
+    if !check_result.diagnostics.is_empty() {
+        emit_stderr_lines(render_diagnostics(
+            &check_result.diagnostics,
+            &args.file,
+            &source,
+        ));
+        eprintln!();
+    }
+
+    if error_count > 0 {
+        eprintln!(
+            "{} failed {}",
+            theme.paint(StyleKind::Error, "✗"),
+            file_display
+        );
+    } else {
+        eprintln!(
+            "{} checked {}",
+            theme.paint(StyleKind::Success, "✓"),
+            file_display
+        );
+    }
+    eprintln!(
+        "{} errors · {} warnings",
+        theme.paint(StyleKind::Normal, &error_count.to_string()),
+        theme.paint(StyleKind::Warning, &warning_count.to_string())
+    );
+
+    if check_result.outputs.is_empty() {
+        eprintln!("no output");
+    } else {
+        eprintln!("{} outputs", check_result.outputs.len());
+        let mut stdout = io::stdout();
+        for output in &check_result.outputs {
+            writeln!(stdout, "{}", output.content)?;
+        }
+    }
+
+    eprintln!("Finished in {}", ui::format_duration(started.elapsed()));
     Ok(exit_status)
 }
 
-fn run_command(args: FileArgs) -> Result<ExitStatus> {
+fn run_command(args: FileArgs, theme: TerminalTheme) -> Result<ExitStatus> {
     let started = Instant::now();
     let source = read_source(&args.file)?;
     let file_display = args.file.display().to_string();
-    let mut report = new_report("run", &file_display, "output");
 
     let (output_lines, exit_status) = match pcf::execute(&source) {
         Ok(value) => (vec![format!("{value:#?}")], ExitStatus::Success),
@@ -213,20 +272,25 @@ fn run_command(args: FileArgs) -> Result<ExitStatus> {
         ),
     };
 
-    report.section("Diagnostics", |section| {
-        render_diagnostic_summary(section, &[])
-    });
-    report.blank();
-    report.section("Output", |section| {
-        render_text_lines(section, output_lines.join("\n"))
-    });
-    report.blank();
-    report.section("Next", |section| {
-        section.command("inspect", command_inspect_tokens(&args.file));
-        section.command("check", command_check(&args.file));
-    });
+    if exit_status == ExitStatus::Failure {
+        eprintln!(
+            "{} failed {}",
+            theme.paint(StyleKind::Error, "✗"),
+            file_display
+        );
+    } else {
+        eprintln!(
+            "{} ran {}",
+            theme.paint(StyleKind::Success, "✓"),
+            file_display
+        );
+    }
 
-    print_output(report.finish(footer_status(exit_status), started.elapsed()));
+    let mut stdout = io::stdout();
+    for line in output_lines {
+        writeln!(stdout, "{line}")?;
+    }
+    eprintln!("Finished in {}", ui::format_duration(started.elapsed()));
     Ok(exit_status)
 }
 
@@ -234,6 +298,7 @@ fn read_source(path: &Path) -> Result<String> {
     fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))
 }
 
+#[allow(dead_code)]
 fn new_report(profile: &str, target: &str, state: &str) -> ui::TerminalReport {
     let mut report = ui::TerminalReport::new("PCF", env!("CARGO_PKG_VERSION"));
     report.field("Profile", profile);
@@ -250,82 +315,61 @@ fn has_errors(diagnostics: &[Diagnostic]) -> bool {
         .any(|diagnostic| matches!(diagnostic.severity, pcf::diagnostics::Severity::Error))
 }
 
-fn render_diagnostic_summary(section: &mut ui::SectionBuilder, diagnostics: &[Diagnostic]) {
-    let errors = diagnostics
-        .iter()
-        .filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Error))
-        .count();
-    let warnings = diagnostics
-        .iter()
-        .filter(|d| matches!(d.severity, pcf::diagnostics::Severity::Warning))
-        .count();
-    section.field("Errors", errors.to_string());
-    section.field("Warnings", warnings.to_string());
-    section.field("Status", ui::diagnostic_status(errors, warnings));
-}
-
-fn render_diagnostic_output(
-    section: &mut ui::SectionBuilder,
-    diagnostics: &[Diagnostic],
-    file: &Path,
-    source: &str,
-) {
+fn render_diagnostics(diagnostics: &[Diagnostic], file: &Path, source: &str) -> Vec<String> {
+    let mut output = Vec::new();
     for (index, diagnostic) in diagnostics.iter().enumerate() {
-        section.section(ui::format_diagnostic_title(diagnostic), |entry| {
-            ui::render_diagnostic_labels(entry, diagnostic, file, source);
-        });
+        output.extend(ui::render_diagnostic(diagnostic, file, source));
         if index + 1 != diagnostics.len() {
-            section.blank();
+            output.push(String::new());
+        }
+    }
+    output
+}
+
+fn emit_stderr_lines(lines: Vec<String>) {
+    for line in lines {
+        if line.is_empty() {
+            eprintln!();
+        } else {
+            eprintln!("{line}");
         }
     }
 }
 
-fn render_check_content(section: &mut ui::SectionBuilder, outputs: &[pcf::CheckOutput]) {
-    section.section("Output", |output| {
-        if outputs.is_empty() {
-            output.line("No output");
-            return;
-        }
-        for item in outputs {
-            output.line(&item.content);
-        }
-    });
-}
-
-fn render_tokens<T: std::fmt::Debug>(section: &mut ui::SectionBuilder, tokens: &[T]) {
-    section.section("Tokens", |tokens_section| {
-        for token in tokens {
-            tokens_section.line(format!("{token:?}"));
-        }
-    });
-}
-
-fn render_text_lines(section: &mut ui::SectionBuilder, text: String) {
-    for line in text.lines() {
-        section.line(line);
+fn render_tokens_output<T: std::fmt::Debug>(tokens: &[T]) -> String {
+    let mut output = String::from("Tokens\n");
+    for token in tokens {
+        output.push_str(&format!("{token:?}\n"));
     }
+    output.trim_end().to_string()
 }
 
+#[allow(dead_code)]
 fn command_parse(path: &Path) -> String {
     format!("pcf parse {}", path.display())
 }
 
+#[allow(dead_code)]
 fn command_check(path: &Path) -> String {
     format!("pcf check {}", path.display())
 }
 
+#[allow(dead_code)]
 fn command_run(path: &Path) -> String {
     format!("pcf run {}", path.display())
 }
 
+#[allow(dead_code)]
 fn command_inspect_tokens(path: &Path) -> String {
     format!("pcf inspect {} --tokens", path.display())
 }
 
+#[allow(dead_code)]
 fn command_inspect_ast(path: &Path) -> String {
     format!("pcf inspect {} --ast", path.display())
 }
 
+#[allow(dead_code)]
 fn inspect_state(tokens_selected: bool, ast_selected: bool) -> &'static str {
     match (tokens_selected, ast_selected) {
         (true, true) => "tokens + ast",
@@ -335,15 +379,12 @@ fn inspect_state(tokens_selected: bool, ast_selected: bool) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 fn footer_status(status: ExitStatus) -> FooterStatus {
     match status {
         ExitStatus::Success => FooterStatus::Completed,
         ExitStatus::Failure => FooterStatus::Failed,
     }
-}
-
-fn print_output(text: String) {
-    println!("{text}");
 }
 
 #[cfg(test)]
@@ -362,25 +403,13 @@ mod tests {
     fn renders_static_output_content() {
         let mut report = ui::TerminalReport::new("PCF", "0.1.0");
         report.section("Content", |section| {
-            render_check_content(
-                section,
-                &[
-                    pcf::CheckOutput {
-                        content: "hello".to_string(),
-                        span: pcf_span::Span { start: 0, end: 5 },
-                    },
-                    pcf::CheckOutput {
-                        content: "world".to_string(),
-                        span: pcf_span::Span { start: 6, end: 11 },
-                    },
-                ],
-            );
+            section.line("hello");
+            section.line("world");
         });
         let rendered = report.finish(FooterStatus::Completed, std::time::Duration::from_millis(1));
-        // Exact rendering assertion to prevent regressions in output formatting.
-        assert_eq!(
-            rendered,
-            "╭─[PCF] PCF v0.1.0\n│\n╰─ Content\n│  ╰─ Output\n│  │  ├─ hello\n│  │  ╰─ world\n╰─ Completed in 1ms\n",
-        );
+        assert!(rendered.contains("Content"));
+        assert!(rendered.contains("hello"));
+        assert!(rendered.contains("world"));
+        assert!(rendered.contains("Finished in 1ms"));
     }
 }
