@@ -258,7 +258,9 @@ pub fn render_diagnostic(diagnostic: &Diagnostic, file: &Path, source: &str) -> 
     for label in labels {
         let location = format_label(file, source, label);
         output.push(location);
-        if !source.is_empty() && let Some(excerpt) = render_label_excerpt(source, label) {
+        if !source.is_empty()
+            && let Some(excerpt) = render_label_excerpt(source, label)
+        {
             output.extend(excerpt);
         }
     }
