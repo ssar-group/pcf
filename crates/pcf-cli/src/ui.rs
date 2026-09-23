@@ -74,11 +74,7 @@ impl TerminalReport {
 
     pub fn finish(self, footer: FooterStatus, duration: Duration) -> String {
         let mut rendered = String::new();
-        let _ = writeln!(
-            rendered,
-            "╭─[{}] {} v{}",
-            self.project_name, self.project_name, self.version
-        );
+        let _ = writeln!(rendered, "╭─ {} v{}", self.project_name, self.version);
         let _ = writeln!(rendered, "│");
         render_nodes(&self.items, "", &mut rendered, ROOT_MIN_FIELD_WIDTH);
         let footer_label = match footer {
@@ -203,7 +199,7 @@ fn render_nodes(nodes: &[Node], prefix: &str, rendered: &mut String, min_field_w
                 let branch = if is_last { "╰─" } else { "├─" };
                 let _ = writeln!(
                     rendered,
-                    "{prefix}{branch} {label:<width$} {value}",
+                    "{prefix}{branch} {label:<width$}: {value}",
                     width = field_width
                 );
             }
@@ -328,7 +324,7 @@ mod tests {
         // Exact rendering assertion to prevent regressions in output formatting.
         assert_eq!(
             rendered,
-            "╭─[PCF] PCF v0.1.0\n│\n├─ Profile      check\n├─ Target       ./example/test/com.pcf\n├─ Module       ./example/test/com.pcf\n├─ State        diagnostics\n│\n├─ Diagnostics\n│  ├─ Errors    0\n│  ├─ Warnings  0\n│  ╰─ Status    clean\n│\n├─ Output\n│  ╰─ No diagnostics found\n│\n╰─ Next\n│  ├─ inspect   pcf inspect ./example/test/com.pcf --ast\n│  ╰─ run       pcf run ./example/test/com.pcf\n╰─ Completed in 1ms\n",
+            "╭─ PCF v0.1.0\n│\n├─ Profile     : check\n├─ Target      : ./example/test/com.pcf\n├─ Module      : ./example/test/com.pcf\n├─ State       : diagnostics\n│\n├─ Diagnostics\n│  ├─ Errors   : 0\n│  ├─ Warnings : 0\n│  ╰─ Status   : clean\n│\n├─ Output\n│  ╰─ No diagnostics found\n│\n╰─ Next\n│  ├─ inspect  : pcf inspect ./example/test/com.pcf --ast\n│  ╰─ run      : pcf run ./example/test/com.pcf\n╰─ Completed in 1ms\n",
         );
     }
 
@@ -381,7 +377,7 @@ mod tests {
         let rendered = report.finish(FooterStatus::Failed, Duration::from_millis(3));
 
         assert!(rendered.contains("├─ Diagnostics"));
-        assert!(rendered.contains("╰─ Status"));
+        assert!(rendered.contains("Status"));
         assert!(rendered.contains("failed"));
         assert!(rendered.contains("╰─ Output"));
         assert!(rendered.contains("├─ error[PCF0001] expected `;`"));
