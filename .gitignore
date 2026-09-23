@@ -31,3 +31,7 @@ Thumbs.db
 *.temp
 *.swp
 *.swo
+
+# Other
+*.sh
+*.zsh

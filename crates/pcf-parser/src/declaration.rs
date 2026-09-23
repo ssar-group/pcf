@@ -1,10 +1,1 @@
-#![allow(dead_code)]
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeclarationKind {
-    Import,
-    Module,
-    Function,
-    Variable,
-    Schema,
-}
+// Placeholder declaration enum removed from the active parser surface.

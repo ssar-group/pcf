@@ -1,10 +1,1 @@
-#![allow(dead_code)]
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StatementKind {
-    Variable,
-    Output,
-    Expression,
-    Return,
-    Block,
-}
+// Placeholder statement enum removed from the active parser surface.
