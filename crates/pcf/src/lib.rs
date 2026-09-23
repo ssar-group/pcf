@@ -7,16 +7,13 @@ pub use pcf_stdlib as stdlib;
 
 pub fn parse(source: &str) -> Result<ast::Program, Error> {
     let lex_result = lexer::lex(source);
-    if let Some(diagnostic) = lex_result.diagnostics.first() {
-        return Err(Error {
-            message: diagnostic.message.clone(),
-        });
-    }
-
     let parse_result = parser::parse(&lex_result.tokens);
-    if let Some(diagnostic) = parse_result.diagnostics.first() {
+    let mut diagnostics = lex_result.diagnostics;
+    diagnostics.extend(parse_result.diagnostics);
+
+    if !diagnostics.is_empty() {
         return Err(Error {
-            message: diagnostic.message.clone(),
+            message: format_diagnostics(&diagnostics),
         });
     }
 
@@ -30,7 +27,12 @@ pub fn check(source: &str) -> Result<CheckResult, Error> {
     let parse_result = parser::parse(&lex_result.tokens);
 
     let mut diagnostics = lex_result.diagnostics;
-    diagnostics.extend(parse_result.diagnostics);
+    diagnostics.extend(parse_result.diagnostics.clone());
+
+    if let Some(program) = parse_result.program.as_ref() {
+        collect_invalid_output_diagnostics(program, &mut diagnostics);
+    }
+
     let outputs = parse_result
         .program
         .as_ref()
@@ -44,8 +46,43 @@ pub fn check(source: &str) -> Result<CheckResult, Error> {
 }
 
 pub fn execute(source: &str) -> Result<runtime::Value, Error> {
-    let _ = parse(source)?;
-    Ok(runtime::Value::Null)
+    let lex_result = lexer::lex(source);
+    let parse_result = parser::parse(&lex_result.tokens);
+    let mut diagnostics = lex_result.diagnostics;
+    diagnostics.extend(parse_result.diagnostics);
+
+    if !diagnostics.is_empty() {
+        return Err(Error {
+            message: format_diagnostics(&diagnostics),
+        });
+    }
+
+    let program = parse_result.program.ok_or_else(|| Error {
+        message: "parser produced no program".to_string(),
+    })?;
+
+    let mut runtime = runtime::Runtime::default();
+    let mut context = runtime::RuntimeContext {
+        environment: &mut runtime.environment,
+        registry: &runtime.registry,
+        permissions: &runtime.permissions,
+        capabilities: &runtime.capabilities,
+    };
+
+    let mut evaluator = runtime::Evaluator::default();
+    evaluator
+        .evaluate_program(&program, &mut context)
+        .map_err(|error| Error {
+            message: error.message,
+        })
+}
+
+fn format_diagnostics(diagnostics: &[diagnostics::Diagnostic]) -> String {
+    diagnostics
+        .iter()
+        .map(|diagnostic| format!("{}: {}", diagnostic.code.0, diagnostic.message))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[derive(Debug)]
@@ -71,6 +108,84 @@ pub struct CheckResult {
 pub struct CheckOutput {
     pub content: String,
     pub span: pcf_span::Span,
+}
+
+fn collect_invalid_output_diagnostics(
+    program: &ast::Program,
+    diagnostics: &mut Vec<diagnostics::Diagnostic>,
+) {
+    for item in &program.items {
+        collect_invalid_output_diagnostics_from_item(item, diagnostics);
+    }
+}
+
+fn collect_invalid_output_diagnostics_from_item(
+    item: &ast::Item,
+    diagnostics: &mut Vec<diagnostics::Diagnostic>,
+) {
+    match item {
+        ast::Item::Statement(ast::Statement::Output(output)) => {
+            if !matches!(output.value.value, ast::Literal::String(_)) {
+                diagnostics.push(diagnostics::Diagnostic {
+                    severity: diagnostics::Severity::Error,
+                    code: diagnostics::DiagnosticCode("PCF1001"),
+                    message: "output requires a string literal".to_string(),
+                    labels: vec![diagnostics::Label {
+                        span: output.span,
+                        message: Some("only string literals are valid static output".to_string()),
+                        primary: true,
+                    }],
+                    notes: vec![
+                        "static output is limited to string literals in the current grammar."
+                            .to_string(),
+                    ],
+                });
+            }
+        }
+        ast::Item::Statement(ast::Statement::Block(block)) => {
+            for statement in &block.statements {
+                collect_invalid_output_diagnostics_from_statement(statement, diagnostics);
+            }
+        }
+        ast::Item::Function(function) => {
+            for statement in &function.body {
+                collect_invalid_output_diagnostics_from_statement(statement, diagnostics);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_invalid_output_diagnostics_from_statement(
+    statement: &ast::Statement,
+    diagnostics: &mut Vec<diagnostics::Diagnostic>,
+) {
+    match statement {
+        ast::Statement::Output(output) => {
+            if !matches!(output.value.value, ast::Literal::String(_)) {
+                diagnostics.push(diagnostics::Diagnostic {
+                    severity: diagnostics::Severity::Error,
+                    code: diagnostics::DiagnosticCode("PCF1001"),
+                    message: "output requires a string literal".to_string(),
+                    labels: vec![diagnostics::Label {
+                        span: output.span,
+                        message: Some("only string literals are valid static output".to_string()),
+                        primary: true,
+                    }],
+                    notes: vec![
+                        "static output is limited to string literals in the current grammar."
+                            .to_string(),
+                    ],
+                });
+            }
+        }
+        ast::Statement::Block(block) => {
+            for nested in &block.statements {
+                collect_invalid_output_diagnostics_from_statement(nested, diagnostics);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_outputs(program: &ast::Program) -> Vec<CheckOutput> {

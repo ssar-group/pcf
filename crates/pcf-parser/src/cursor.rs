@@ -22,10 +22,6 @@ impl<'a> Cursor<'a> {
         self.current().map(|token| token.kind.clone())
     }
 
-    pub fn peek(&self, offset: usize) -> Option<&Token> {
-        self.tokens.get(self.position.saturating_add(offset))
-    }
-
     pub fn is_end(&self) -> bool {
         match self.current() {
             Some(token) => matches!(token.kind, TokenKind::Eof),

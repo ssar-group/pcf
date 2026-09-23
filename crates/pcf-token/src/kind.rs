@@ -11,6 +11,7 @@ pub enum TokenKind {
     Import,
     Export,
     Module,
+    Schema,
     Let,
     Const,
     Fn,
