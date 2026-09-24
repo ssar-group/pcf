@@ -69,7 +69,7 @@ pub fn execute(source: &str) -> Result<runtime::Value, Error> {
         capabilities: &runtime.capabilities,
     };
 
-    let mut evaluator = runtime::Evaluator::default();
+    let mut evaluator = runtime::Evaluator;
     evaluator
         .evaluate_program(&program, &mut context)
         .map_err(|error| Error {

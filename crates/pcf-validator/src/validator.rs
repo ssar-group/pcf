@@ -26,12 +26,13 @@ impl Validator {
                         }
                     }
                 }
-                Item::Variable(variable) if variable.statement.value.is_none() => {
-                    if !seen.insert(variable.statement.name.name.clone()) {
-                        diagnostics.push(duplicate_parameter_diagnostic(
-                            &variable.statement.name.name,
-                        ));
-                    }
+                Item::Variable(variable)
+                    if variable.statement.value.is_none()
+                        && !seen.insert(variable.statement.name.name.clone()) =>
+                {
+                    diagnostics.push(duplicate_parameter_diagnostic(
+                        &variable.statement.name.name,
+                    ));
                 }
                 _ => {}
             }

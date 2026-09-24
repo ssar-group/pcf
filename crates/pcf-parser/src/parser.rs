@@ -299,9 +299,7 @@ impl<'a> Parser<'a> {
 
         let mut path = Vec::new();
         loop {
-            let Some(identifier) = self.parse_identifier() else {
-                return None;
-            };
+            let identifier = self.parse_identifier()?;
             path.push(identifier);
             if self.consume_if(&TokenKind::Dot).is_none() {
                 break;
@@ -717,13 +715,13 @@ fn missing_close_token(token: &Token, expected: &TokenKind) -> Diagnostic {
         code: DiagnosticCode("PCF1002"),
         message: format!(
             "expected {} to close the preceding construct",
-            describe_kind(&expected)
+            describe_kind(expected)
         ),
         labels: vec![Label {
             span: token.span,
             message: Some(format!(
                 "missing {} before the end of this block",
-                describe_kind(&expected)
+                describe_kind(expected)
             )),
             primary: true,
         }],
