@@ -9,6 +9,7 @@ pub fn keyword_kind(ident: &str) -> Option<TokenKind> {
         "import" => TokenKind::Import,
         "export" => TokenKind::Export,
         "module" => TokenKind::Module,
+        "schema" => TokenKind::Schema,
         "let" => TokenKind::Let,
         "const" => TokenKind::Const,
         "fn" => TokenKind::Fn,

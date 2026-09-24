@@ -6,4 +6,5 @@ edition.workspace = true
 [dependencies]
 pcf-ast = { path = "../pcf-ast" }
 pcf-diagnostics = { path = "../pcf-diagnostics" }
+pcf-span = { path = "../pcf-span" }
 

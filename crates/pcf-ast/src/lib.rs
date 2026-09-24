@@ -13,7 +13,7 @@ mod types;
 
 pub use declaration::Declaration;
 pub use declaration::VariableDeclaration;
-pub use expression::{BinaryExpression, Expression, LiteralExpression};
+pub use expression::{BinaryExpression, Expression, LiteralExpression, UnaryExpression};
 pub use function::{FunctionDeclaration, FunctionParameter};
 pub use identifier::Identifier;
 pub use import::ImportDeclaration;
@@ -23,6 +23,7 @@ pub use operator::{BinaryOperator, UnaryOperator};
 pub use program::{Item, Program};
 pub use schema::SchemaDeclaration;
 pub use statement::{
-    BlockStatement, ExpressionStatement, OutputStatement, Statement, VariableStatement,
+    BlockStatement, ExpressionStatement, OutputStatement, ReturnStatement, Statement,
+    VariableStatement,
 };
 pub use types::TypeAnnotation;

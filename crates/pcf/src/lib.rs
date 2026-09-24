@@ -5,18 +5,13 @@ pub use pcf_parser as parser;
 pub use pcf_runtime as runtime;
 pub use pcf_stdlib as stdlib;
 
-pub fn parse(source: &str) -> Result<ast::Program, Error> {
-    let lex_result = lexer::lex(source);
-    if let Some(diagnostic) = lex_result.diagnostics.first() {
-        return Err(Error {
-            message: diagnostic.message.clone(),
-        });
-    }
+mod pipeline;
 
-    let parse_result = parser::parse(&lex_result.tokens);
-    if let Some(diagnostic) = parse_result.diagnostics.first() {
+pub fn parse(source: &str) -> Result<ast::Program, Error> {
+    let parse_result = pipeline::run_parse(source);
+    if !parse_result.diagnostics.is_empty() {
         return Err(Error {
-            message: diagnostic.message.clone(),
+            message: format_diagnostics(&parse_result.diagnostics),
         });
     }
 
@@ -26,17 +21,7 @@ pub fn parse(source: &str) -> Result<ast::Program, Error> {
 }
 
 pub fn check(source: &str) -> Result<CheckResult, Error> {
-    let lex_result = lexer::lex(source);
-    let parse_result = parser::parse(&lex_result.tokens);
-
-    let mut diagnostics = lex_result.diagnostics;
-    diagnostics.extend(parse_result.diagnostics);
-    let outputs = parse_result
-        .program
-        .as_ref()
-        .map(collect_outputs)
-        .unwrap_or_default();
-
+    let (diagnostics, outputs) = pipeline::run_check(source);
     Ok(CheckResult {
         diagnostics,
         outputs,
@@ -44,8 +29,18 @@ pub fn check(source: &str) -> Result<CheckResult, Error> {
 }
 
 pub fn execute(source: &str) -> Result<runtime::Value, Error> {
-    let _ = parse(source)?;
-    Ok(runtime::Value::Null)
+    match pipeline::run_execute(source) {
+        Ok(value) => Ok(value),
+        Err(message) => Err(Error { message }),
+    }
+}
+
+fn format_diagnostics(diagnostics: &[diagnostics::Diagnostic]) -> String {
+    diagnostics
+        .iter()
+        .map(|diagnostic| format!("{}: {}", diagnostic.code.0, diagnostic.message))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[derive(Debug)]
@@ -71,47 +66,6 @@ pub struct CheckResult {
 pub struct CheckOutput {
     pub content: String,
     pub span: pcf_span::Span,
-}
-
-fn collect_outputs(program: &ast::Program) -> Vec<CheckOutput> {
-    let mut outputs = Vec::new();
-
-    for item in &program.items {
-        collect_outputs_from_item(item, &mut outputs);
-    }
-
-    outputs
-}
-
-fn collect_outputs_from_item(item: &ast::Item, outputs: &mut Vec<CheckOutput>) {
-    match item {
-        ast::Item::Statement(statement) => collect_outputs_from_statement(statement, outputs),
-        ast::Item::Function(function) => {
-            for statement in &function.body {
-                collect_outputs_from_statement(statement, outputs);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn collect_outputs_from_statement(statement: &ast::Statement, outputs: &mut Vec<CheckOutput>) {
-    match statement {
-        ast::Statement::Output(output) => {
-            if let ast::Literal::String(content) = &output.value.value {
-                outputs.push(CheckOutput {
-                    content: content.clone(),
-                    span: output.span,
-                });
-            }
-        }
-        ast::Statement::Block(block) => {
-            for nested in &block.statements {
-                collect_outputs_from_statement(nested, outputs);
-            }
-        }
-        _ => {}
-    }
 }
 
 #[cfg(test)]

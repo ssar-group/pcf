@@ -11,3 +11,6 @@ pcf-parser = { path = "../pcf-parser" }
 pcf-runtime = { path = "../pcf-runtime" }
 pcf-stdlib = { path = "../pcf-stdlib" }
 pcf-span = { path = "../pcf-span" }
+pcf-analyzer = { path = "../pcf-analyzer" }
+pcf-validator = { path = "../pcf-validator" }
+pcf-resolver = { path = "../pcf-resolver" }
