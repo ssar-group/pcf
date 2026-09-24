@@ -99,9 +99,9 @@ impl Evaluator {
                 // is insufficient. Implement return propagation via a sentinel
                 // by using a RuntimeError with a flag-like message not ideal; but
                 // keep internal handling: we'll return a special error type.
-                return Err(RuntimeError {
+                Err(RuntimeError {
                     message: format!("__PCF_RETURN__:{}", serialize_value_for_return(&value)),
-                });
+                })
             }
         }
     }
@@ -355,15 +355,15 @@ fn extract_return_from_error(err: &RuntimeError) -> Option<Value> {
     if let Some(rest) = payload.strip_prefix("B:") {
         return Some(Value::Boolean(rest != "0"));
     }
-    if let Some(rest) = payload.strip_prefix("I:") {
-        if let Ok(i) = rest.parse::<i64>() {
-            return Some(Value::Integer(i));
-        }
+    if let Some(rest) = payload.strip_prefix("I:")
+        && let Ok(i) = rest.parse::<i64>()
+    {
+        return Some(Value::Integer(i));
     }
-    if let Some(rest) = payload.strip_prefix("F:") {
-        if let Ok(f) = rest.parse::<f64>() {
-            return Some(Value::Float(f));
-        }
+    if let Some(rest) = payload.strip_prefix("F:")
+        && let Ok(f) = rest.parse::<f64>()
+    {
+        return Some(Value::Float(f));
     }
     if let Some(rest) = payload.strip_prefix("S:") {
         // format S:<len>:<data>

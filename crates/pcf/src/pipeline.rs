@@ -4,10 +4,7 @@ use pcf_diagnostics as diagnostics;
 use pcf_lexer as lexer;
 use pcf_parser as parser;
 use pcf_resolver::Resolver;
-use pcf_runtime::{
-    CapabilitySet, Evaluator, PermissionSet, Runtime, RuntimeContext, RuntimeRegistry, Value,
-};
-use pcf_span::Span;
+use pcf_runtime::{Evaluator, Runtime, RuntimeContext, Value};
 use pcf_validator::Validator;
 
 pub fn run_parse(source: &str) -> parser::ParseResult {
@@ -26,17 +23,17 @@ pub fn run_check(source: &str) -> (Vec<diagnostics::Diagnostic>, Vec<crate::Chec
 
     if let Some(program) = parse_result.program.as_ref() {
         // Analyzer
-        let analyzer = Analyzer::default();
+        let analyzer = Analyzer;
         let analysis = analyzer.analyze(program);
         diagnostics.extend(analysis.diagnostics);
 
         // Validator
-        let validator = Validator::default();
+        let validator = Validator;
         let validation = validator.validate(program);
         diagnostics.extend(validation.diagnostics);
 
         // Resolver (errors become diagnostics)
-        let resolver = Resolver::default();
+        let resolver = Resolver;
         match resolver.resolve_program(program) {
             Ok(_module) => {}
             Err(err) => {
@@ -79,7 +76,7 @@ pub fn run_execute(source: &str) -> Result<Value, String> {
         capabilities: &runtime.capabilities,
     };
 
-    let mut evaluator = Evaluator::default();
+    let mut evaluator = Evaluator;
     evaluator
         .evaluate_program(&program, &mut context)
         .map_err(|e| e.message)

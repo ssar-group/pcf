@@ -38,13 +38,11 @@ impl Validator {
                 Item::Statement(statement) => {
                     collect_output_diagnostics_from_statement(statement, &mut diagnostics);
                 }
-                Item::Variable(variable) => {
-                    // top-level variable declarations are not parameter diagnostics
-                    // but ensure names are not empty (defensive)
-                    if variable.statement.name.name.is_empty() {
-                        diagnostics.push(invalid_declaration_diagnostic(variable.statement.span));
-                    }
+                Item::Variable(variable) if variable.statement.name.name.is_empty() => {
+                    // Defensive: report invalid declaration when the name is empty
+                    diagnostics.push(invalid_declaration_diagnostic(variable.statement.span));
                 }
+                Item::Variable(_) => {}
                 _ => {}
             }
         }
