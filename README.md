@@ -3,6 +3,7 @@
 ![experimental](https://img.shields.io/badge/status-experimental-blueviolet.svg?colorA=303033&colorB=a08a2c)
 ![Version](https://img.shields.io/badge/version-E.0.1-blueviolet.svg?colorA=303033&colorB=6315ac)
 ![Platform](https://img.shields.io/badge/platform-cross--platform-000000.svg?colorA=303033&colorB=fff)
+[![Quality](https://github.com/ssar-group/pcf/actions/workflows/quality.yml/badge.svg)](https://github.com/ssar-group/pcf/actions/workflows/quality.yml)
 
 **PCF (Processing Compact File)** is a compact and extensible format and processing system for working with structured data.
 
