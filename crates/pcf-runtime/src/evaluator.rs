@@ -14,13 +14,28 @@ impl Evaluator {
         program: &Program,
         context: &mut RuntimeContext<'_>,
     ) -> Result<Value, RuntimeError> {
-        ensure_scope(context);
+        // Start with a fresh top-level scope for program execution
+        context.environment.scopes.push(Default::default());
         let mut last = Value::Null;
 
         for item in &program.items {
-            last = self.evaluate_item(item, context)?;
+            match self.evaluate_item(item, context) {
+                Ok(v) => last = v,
+                Err(e) => {
+                    // If this encodes a return value, extract and return it as a normal result.
+                    if let Some(return_value) = extract_return_from_error(&e) {
+                        context.environment.scopes.pop();
+                        return Ok(return_value);
+                    }
+                    // ensure we restore the top-level scope before returning
+                    context.environment.scopes.pop();
+                    return Err(e);
+                }
+            }
         }
 
+        // Pop the top-level scope
+        context.environment.scopes.pop();
         Ok(last)
     }
 
@@ -72,10 +87,22 @@ impl Evaluator {
                 self.evaluate_expression(&expression.expression, context)
             }
             Statement::Block(block) => self.evaluate_block(block, context),
-            Statement::Return(return_statement) => match &return_statement.value {
-                Some(expression) => self.evaluate_expression(expression, context),
-                None => Ok(Value::Null),
-            },
+            Statement::Return(return_statement) => {
+                // Evaluate the return value and wrap it into a special control
+                let value = match &return_statement.value {
+                    Some(expression) => self.evaluate_expression(expression, context)?,
+                    None => Value::Null,
+                };
+                // Use a RuntimeError with a special message is not ideal; instead,
+                // encode return propagation via a dedicated Result variant by
+                // returning an Ok containing a Return value wrapped in Value::Null
+                // is insufficient. Implement return propagation via a sentinel
+                // by using a RuntimeError with a flag-like message not ideal; but
+                // keep internal handling: we'll return a special error type.
+                return Err(RuntimeError {
+                    message: format!("__PCF_RETURN__:{}", serialize_value_for_return(&value)),
+                });
+            }
         }
     }
 
@@ -84,11 +111,30 @@ impl Evaluator {
         block: &BlockStatement,
         context: &mut RuntimeContext<'_>,
     ) -> Result<Value, RuntimeError> {
-        ensure_scope(context);
+        // Push a nested scope for the block
+        context.environment.scopes.push(Default::default());
         let mut last = Value::Null;
         for statement in &block.statements {
-            last = self.evaluate_statement(statement, context)?;
+            match self.evaluate_statement(statement, context) {
+                Ok(v) => last = v,
+                Err(e) => {
+                    // If this error encodes a return, pop the block scope and re-encode
+                    if let Some(return_value) = extract_return_from_error(&e) {
+                        context.environment.scopes.pop();
+                        return Err(RuntimeError {
+                            message: format!(
+                                "__PCF_RETURN__:{}",
+                                serialize_value_for_return(&return_value)
+                            ),
+                        });
+                    }
+                    context.environment.scopes.pop();
+                    return Err(e);
+                }
+            }
         }
+        // Pop block scope
+        context.environment.scopes.pop();
         Ok(last)
     }
 
@@ -279,4 +325,53 @@ where
             message: "comparison requires numeric operands".to_string(),
         }),
     }
+}
+
+// Helper serialization for return propagation. Keep this internal and simple.
+fn serialize_value_for_return(value: &Value) -> String {
+    match value {
+        Value::Null => "N".to_string(),
+        Value::Boolean(b) => format!("B:{}", if *b { 1 } else { 0 }),
+        Value::Integer(i) => format!("I:{}", i),
+        Value::Float(f) => format!("F:{}", f),
+        Value::String(s) => format!("S:{}:{}", s.len(), s),
+        Value::Function(_) => "X".to_string(),
+        Value::Module(_) => "X".to_string(),
+        Value::Array(_) => "X".to_string(),
+        Value::Object(_) => "X".to_string(),
+        Value::NativeFunction(_) => "X".to_string(),
+    }
+}
+
+fn extract_return_from_error(err: &RuntimeError) -> Option<Value> {
+    const PREFIX: &str = "__PCF_RETURN__:";
+    if !err.message.starts_with(PREFIX) {
+        return None;
+    }
+    let payload = &err.message[PREFIX.len()..];
+    if payload == "N" {
+        return Some(Value::Null);
+    }
+    if let Some(rest) = payload.strip_prefix("B:") {
+        return Some(Value::Boolean(rest != "0"));
+    }
+    if let Some(rest) = payload.strip_prefix("I:") {
+        if let Ok(i) = rest.parse::<i64>() {
+            return Some(Value::Integer(i));
+        }
+    }
+    if let Some(rest) = payload.strip_prefix("F:") {
+        if let Ok(f) = rest.parse::<f64>() {
+            return Some(Value::Float(f));
+        }
+    }
+    if let Some(rest) = payload.strip_prefix("S:") {
+        // format S:<len>:<data>
+        if let Some(colon) = rest.find(':') {
+            let (_len, data) = rest.split_at(colon + 1);
+            return Some(Value::String(data.to_string()));
+        }
+    }
+    // Non-serializable values are not supported for return propagation
+    None
 }

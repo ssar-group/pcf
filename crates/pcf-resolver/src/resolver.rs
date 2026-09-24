@@ -4,16 +4,15 @@ use pcf_ast::{Item, Program};
 
 use crate::{ModulePath, ResolveError, ResolvedModule};
 
-#[derive(Debug, Clone, Default)]
-pub struct ResolveResult {
-    pub module: Option<ResolvedModule>,
-}
-
 #[derive(Debug, Default)]
 pub struct Resolver;
 
 impl Resolver {
-    pub fn resolve_program(&self, program: &Program) -> Result<ResolveResult, ResolveError> {
+    /// Resolve the program into a concrete module path. The previous API
+    /// returned an Option inside ResolveResult even though errors were already
+    /// represented by Result. Simplify by returning ResolvedModule directly on
+    /// success.
+    pub fn resolve_program(&self, program: &Program) -> Result<ResolvedModule, ResolveError> {
         let mut segments = HashSet::new();
         let mut modules = Vec::new();
 
@@ -51,10 +50,8 @@ impl Resolver {
         ordered.sort();
         ordered.dedup();
 
-        Ok(ResolveResult {
-            module: Some(ResolvedModule {
-                path: ModulePath { segments: ordered },
-            }),
+        Ok(ResolvedModule {
+            path: ModulePath { segments: ordered },
         })
     }
 }

@@ -10,7 +10,7 @@ mod symbol_table;
 
 pub use error::ResolveError;
 pub use module::{ModulePath, ResolvedModule};
-pub use resolver::{ResolveResult, Resolver};
+pub use resolver::Resolver;
 pub use scope::Scope;
 pub use scope_id::ScopeId;
 pub use symbol::{Symbol, SymbolKind};
