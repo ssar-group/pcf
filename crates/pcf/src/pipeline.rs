@@ -32,20 +32,9 @@ pub fn run_check(source: &str) -> (Vec<diagnostics::Diagnostic>, Vec<crate::Chec
         let validation = validator.validate(program);
         diagnostics.extend(validation.diagnostics);
 
-        // Resolver (errors become diagnostics)
+        // Resolver diagnostics are kept structured and independent from terminal rendering.
         let resolver = Resolver;
-        match resolver.resolve_program(program) {
-            Ok(_module) => {}
-            Err(err) => {
-                diagnostics.push(diagnostics::Diagnostic {
-                    severity: diagnostics::Severity::Error,
-                    code: diagnostics::DiagnosticCode("PCF4001"),
-                    message: err.message,
-                    labels: Vec::new(),
-                    notes: Vec::new(),
-                });
-            }
-        }
+        diagnostics.extend(resolver.resolve_diagnostics(program));
 
         // Collect outputs (static string outputs)
         outputs = collect_outputs(program);
@@ -117,6 +106,26 @@ fn collect_outputs_from_statement(
         }
         ast::Statement::Block(block) => {
             for nested in &block.statements {
+                collect_outputs_from_statement(nested, outputs);
+            }
+        }
+        ast::Statement::If(flow) => {
+            for nested in &flow.then_branch.statements {
+                collect_outputs_from_statement(nested, outputs);
+            }
+            if let Some(block) = &flow.else_branch {
+                for nested in &block.statements {
+                    collect_outputs_from_statement(nested, outputs);
+                }
+            }
+        }
+        ast::Statement::While(flow) => {
+            for nested in &flow.body.statements {
+                collect_outputs_from_statement(nested, outputs);
+            }
+        }
+        ast::Statement::For(flow) => {
+            for nested in &flow.body.statements {
                 collect_outputs_from_statement(nested, outputs);
             }
         }

@@ -47,6 +47,78 @@ impl Validator {
             }
         }
 
+        let mut allowed = HashSet::new();
+        let mut blocked = HashSet::new();
+        for item in &program.items {
+            match item {
+                Item::AllowMethods(declaration) => {
+                    for (method, span) in &declaration.methods {
+                        if !allowed.insert(*method) {
+                            diagnostics.push(method_diagnostic(
+                                "PCF4002",
+                                "duplicate HTTP method",
+                                *span,
+                            ));
+                        }
+                    }
+                }
+                Item::BlockMethods(declaration) => {
+                    for (method, span) in &declaration.methods {
+                        if !blocked.insert(*method) {
+                            diagnostics.push(method_diagnostic(
+                                "PCF4002",
+                                "duplicate HTTP method",
+                                *span,
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        for item in &program.items {
+            if let Item::AllowMethods(declaration) = item {
+                for (method, span) in &declaration.methods {
+                    if blocked.contains(method) {
+                        diagnostics.push(method_diagnostic(
+                            "PCF4003",
+                            "HTTP method is both allowed and blocked",
+                            *span,
+                        ));
+                    }
+                }
+            }
+        }
+        let mut routes = HashSet::new();
+        let explicit_allow = !allowed.is_empty();
+        for item in &program.items {
+            if let Item::Process(route) = item {
+                if !route.path.starts_with('/') || route.path.contains(char::is_whitespace) {
+                    diagnostics.push(route_diagnostic(route.path_span));
+                }
+                if !routes.insert((route.path.clone(), route.method)) {
+                    diagnostics.push(method_diagnostic(
+                        "PCF4004",
+                        "duplicate route and HTTP method",
+                        route.span,
+                    ));
+                }
+                if blocked.contains(&route.method) {
+                    diagnostics.push(method_diagnostic(
+                        "PCF4006",
+                        "route uses a blocked HTTP method",
+                        route.method_span,
+                    ));
+                } else if explicit_allow && !allowed.contains(&route.method) {
+                    diagnostics.push(method_diagnostic(
+                        "PCF4007",
+                        "route method is not explicitly allowed",
+                        route.method_span,
+                    ));
+                }
+            }
+        }
+
         ValidationResult { diagnostics }
     }
 }
@@ -94,8 +166,45 @@ fn collect_output_diagnostics_from_statement(
                 collect_output_diagnostics_from_statement(nested, diagnostics);
             }
         }
+        Statement::If(flow) => {
+            for s in &flow.then_branch.statements {
+                collect_output_diagnostics_from_statement(s, diagnostics);
+            }
+            if let Some(b) = &flow.else_branch {
+                for s in &b.statements {
+                    collect_output_diagnostics_from_statement(s, diagnostics);
+                }
+            }
+        }
+        Statement::While(flow) => {
+            for s in &flow.body.statements {
+                collect_output_diagnostics_from_statement(s, diagnostics);
+            }
+        }
+        Statement::For(flow) => {
+            for s in &flow.body.statements {
+                collect_output_diagnostics_from_statement(s, diagnostics);
+            }
+        }
         _ => {}
     }
+}
+
+fn method_diagnostic(code: &'static str, message: &str, span: Span) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code: DiagnosticCode(code),
+        message: message.to_string(),
+        labels: vec![Label {
+            span,
+            message: None,
+            primary: true,
+        }],
+        notes: Vec::new(),
+    }
+}
+fn route_diagnostic(span: Span) -> Diagnostic {
+    method_diagnostic("PCF4005", "invalid route path", span)
 }
 
 fn invalid_output_diagnostic(span: Span) -> Diagnostic {

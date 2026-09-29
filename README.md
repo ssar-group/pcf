@@ -66,6 +66,24 @@ PCF follows a few simple principles:
 - **Portable** — work across platforms and programming languages.
 - **Modular** — keep the core, libraries, and integrations separated.
 
+## Language syntax (experimental)
+
+The current parser recognizes declarations (`import`, `module`, `schema`, `let`, `const`, `fn`), static string output, return statements, expressions, and `if`/`else`, `while`, and `for name in expression` control flow. Function parameters may have optional type annotations; annotations are syntax only and do not define a runtime type system. Expressions support calls, dotted member access, grouping, unary `!`/`-`, arithmetic, comparisons, equality, `&&`, and `||` with conventional precedence.
+
+Processing configuration uses first-class declarations:
+
+```pcf
+allow_methods { GET, POST, PUT, PATCH };
+block_methods { DELETE, TRACE };
+r_process "/health" GET { return; }
+```
+
+HTTP methods are case-sensitive and use the standard uppercase names `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `CONNECT`, or `TRACE`. Routes require an absolute quoted path. The checker reports duplicate methods, allow/block contradictions, invalid paths, and duplicate route/method pairs. These directives are parsed and checked; the current runtime does not execute route declarations or the newly recognized control-flow and call/member syntax.
+
+Imports accept both `import std.core` and `import std::core`. Both forms produce the same ordered namespace path in the AST; `::` is the preferred spelling. Dotted imports remain supported for compatibility.
+
+Diagnostic code groups are stable: `PCF000x` lexer, `PCF100x` parser, `PCF200x` resolver, `PCF300x` analyzer, `PCF400x` validator, and `PCF500x` runtime. Existing diagnostics keep their previously published codes for compatibility.
+
 ## Repository
 
 This repository contains the main PCF workspace and the components used to build the project.

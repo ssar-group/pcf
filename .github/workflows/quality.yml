@@ -1,3 +1,6 @@
+# Runs Rust formatting, compilation, tests, and Clippy checks on pushes and pull requests.
+# Skips the job for `[Docs]` and `[Misc]` commits or pull requests.
+
 name: Quality
 
 on:
@@ -10,6 +13,21 @@ permissions:
 jobs:
   rust:
     name: Rust quality
+    if: >
+      !(
+        (github.event_name == 'push' &&
+          (
+            startsWith(github.event.head_commit.message, '[Docs]') ||
+            startsWith(github.event.head_commit.message, '[Misc]')
+          )
+        ) ||
+        (github.event_name == 'pull_request' &&
+          (
+            startsWith(github.event.pull_request.title, '[Docs]') ||
+            startsWith(github.event.pull_request.title, '[Misc]')
+          )
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:

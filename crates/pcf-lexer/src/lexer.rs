@@ -74,6 +74,12 @@ pub fn lex(source: &str) -> LexResult {
                 start,
                 TokenKind::RightParen,
             ),
+            ':' if cursor.peek_next() == Some(':') => push_double(
+                &mut result.tokens,
+                &mut cursor,
+                start,
+                TokenKind::ColonColon,
+            ),
             ':' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Colon),
             ';' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Semicolon),
             ',' => push_single(&mut result.tokens, &mut cursor, start, TokenKind::Comma),

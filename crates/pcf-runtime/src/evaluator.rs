@@ -62,6 +62,8 @@ impl Evaluator {
                 Ok(Value::Null)
             }
             Item::Import(_) | Item::Module(_) | Item::Schema(_) => Ok(Value::Null),
+            Item::Export(export) => self.evaluate_item(&export.declaration, context),
+            Item::AllowMethods(_) | Item::BlockMethods(_) | Item::Process(_) => Err(RuntimeError { message: "processing declarations are validated but not executable by the current runtime".to_string() }),
         }
     }
 
@@ -103,6 +105,10 @@ impl Evaluator {
                     message: format!("__PCF_RETURN__:{}", serialize_value_for_return(&value)),
                 })
             }
+            Statement::If(_) | Statement::While(_) | Statement::For(_) => Err(RuntimeError {
+                message: "control-flow execution is not implemented by the current runtime"
+                    .to_string(),
+            }),
         }
     }
 
@@ -149,6 +155,10 @@ impl Evaluator {
             Expression::Unary(unary) => self.evaluate_unary(unary, context),
             Expression::Binary(binary) => self.evaluate_binary(binary, context),
             Expression::Group(group) => self.evaluate_expression(group, context),
+            Expression::Call(_) | Expression::Member(_) => Err(RuntimeError {
+                message: "call and member expressions are not implemented by the current runtime"
+                    .to_string(),
+            }),
         }
     }
 

@@ -19,6 +19,9 @@ pub fn keyword_kind(ident: &str) -> Option<TokenKind> {
         "for" => TokenKind::For,
         "while" => TokenKind::While,
         "in" => TokenKind::In,
+        "allow_methods" => TokenKind::AllowMethods,
+        "block_methods" => TokenKind::BlockMethods,
+        "r_process" => TokenKind::RProcess,
         _ => return None,
     })
 }

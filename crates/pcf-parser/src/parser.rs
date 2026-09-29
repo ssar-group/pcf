@@ -1,9 +1,10 @@
 use pcf_ast::{
-    BinaryExpression, BinaryOperator, BlockStatement, Expression, ExpressionStatement,
-    FunctionDeclaration, FunctionParameter, Identifier, ImportDeclaration, Item, Literal,
-    LiteralExpression, ModuleDeclaration, OutputStatement, Program, ReturnStatement,
-    SchemaDeclaration, Statement, TypeAnnotation, UnaryExpression, UnaryOperator,
-    VariableDeclaration, VariableStatement,
+    BinaryExpression, BinaryOperator, BlockStatement, CallExpression, ExportDeclaration,
+    Expression, ExpressionStatement, ForStatement, FunctionDeclaration, FunctionParameter,
+    HttpMethod, Identifier, IfStatement, ImportDeclaration, Item, Literal, LiteralExpression,
+    MemberExpression, MethodDeclaration, ModuleDeclaration, OutputStatement, ProcessDeclaration,
+    Program, ReturnStatement, SchemaDeclaration, Statement, TypeAnnotation, UnaryExpression,
+    UnaryOperator, VariableDeclaration, VariableStatement, WhileStatement,
 };
 use pcf_diagnostics::{Diagnostic, DiagnosticCode, Label, Severity};
 use pcf_span::Span;
@@ -43,8 +44,12 @@ impl<'a> Parser<'a> {
         self.skip_separators();
 
         while !self.is_at_end() {
+            let before = self.current().map(|token| token.span.start);
             if let Some(item) = self.parse_item() {
                 items.push(item);
+            }
+            if self.current().map(|token| token.span.start) == before && !self.is_at_end() {
+                self.advance();
             }
             self.skip_separators();
         }
@@ -63,6 +68,24 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Module) => self.parse_module_declaration().map(Item::Module),
             Some(TokenKind::Schema) => self.parse_schema_declaration().map(Item::Schema),
             Some(TokenKind::Fn) => self.parse_function_declaration().map(Item::Function),
+            Some(TokenKind::Export) => {
+                let start = self.current()?.span.start;
+                self.advance();
+                self.parse_item().map(|item| {
+                    let end = item_span(&item).end;
+                    Item::Export(ExportDeclaration {
+                        declaration: Box::new(item),
+                        span: Span { start, end },
+                    })
+                })
+            }
+            Some(TokenKind::AllowMethods) => {
+                self.parse_method_declaration(true).map(Item::AllowMethods)
+            }
+            Some(TokenKind::BlockMethods) => {
+                self.parse_method_declaration(false).map(Item::BlockMethods)
+            }
+            Some(TokenKind::RProcess) => self.parse_process_declaration().map(Item::Process),
             Some(TokenKind::Let | TokenKind::Const) => {
                 self.parse_variable_declaration().map(Item::Variable)
             }
@@ -85,6 +108,9 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Let | TokenKind::Const) => self.parse_variable_statement(),
             Some(TokenKind::LeftBrace) => self.parse_block_statement(),
             Some(TokenKind::Return) => self.parse_return_statement(),
+            Some(TokenKind::If) => self.parse_if_statement(),
+            Some(TokenKind::While) => self.parse_while_statement(),
+            Some(TokenKind::For) => self.parse_for_statement(),
             Some(TokenKind::Eof) | None => None,
             Some(_) => {
                 let expression = self.parse_expression()?;
@@ -145,8 +171,34 @@ impl<'a> Parser<'a> {
         let name = self.parse_identifier()?;
 
         let mut value = None;
-        if self.consume_if(&TokenKind::Equal).is_some() {
+        if let Some(equal) = self.consume_if(&TokenKind::Equal) {
             value = self.parse_expression();
+            if value.is_none() {
+                self.diagnostics.push(Diagnostic {
+                    severity: Severity::Error,
+                    code: DiagnosticCode("PCF1008"),
+                    message: "expected an expression after `=`".to_string(),
+                    labels: vec![Label {
+                        span: equal.span,
+                        message: Some("initializer is missing".to_string()),
+                        primary: true,
+                    }],
+                    notes: Vec::new(),
+                });
+            }
+        }
+        if matches!(keyword.kind, TokenKind::Const) && value.is_none() {
+            self.diagnostics.push(Diagnostic {
+                severity: Severity::Error,
+                code: DiagnosticCode("PCF1009"),
+                message: "constant declarations require an initializer".to_string(),
+                labels: vec![Label {
+                    span: keyword.span,
+                    message: Some("add `= expression` to this declaration".to_string()),
+                    primary: true,
+                }],
+                notes: Vec::new(),
+            });
         }
 
         let end = value
@@ -157,6 +209,7 @@ impl<'a> Parser<'a> {
             statement: VariableStatement {
                 name,
                 value,
+                mutable: matches!(keyword.kind, TokenKind::Let),
                 span: Span {
                     start: keyword.span.start,
                     end,
@@ -189,9 +242,10 @@ impl<'a> Parser<'a> {
                 if self.consume_if(&TokenKind::Colon).is_some() {
                     ty = self.parse_type_annotation();
                 }
-                let param_end = ty.as_ref().map_or(param_name.span.end, |annotation| {
-                    annotation_span(annotation).end
-                });
+                let param_end = ty
+                    .as_ref()
+                    .and_then(|_| self.cursor.previous())
+                    .map_or(param_name.span.end, |token| token.span.end);
                 parameters.push(FunctionParameter {
                     name: param_name.clone(),
                     ty,
@@ -301,7 +355,9 @@ impl<'a> Parser<'a> {
         loop {
             let identifier = self.parse_identifier()?;
             path.push(identifier);
-            if self.consume_if(&TokenKind::Dot).is_none() {
+            if self.consume_if(&TokenKind::Dot).is_none()
+                && self.consume_if(&TokenKind::ColonColon).is_none()
+            {
                 break;
             }
         }
@@ -322,10 +378,14 @@ impl<'a> Parser<'a> {
         let module_token = self.current()?.clone();
         self.advance();
         let name = self.parse_identifier()?;
-        if self.check(&TokenKind::LeftBrace) {
-            let _ = self.parse_block_statement();
-        }
-        let end = name.span.end;
+        let end = if self.check(&TokenKind::LeftBrace) {
+            match self.parse_block_statement() {
+                Some(Statement::Block(block)) => block.span.end,
+                _ => name.span.end,
+            }
+        } else {
+            name.span.end
+        };
         Some(ModuleDeclaration {
             name,
             span: Span {
@@ -340,11 +400,14 @@ impl<'a> Parser<'a> {
         self.advance();
         let name = self.parse_identifier()?;
 
-        if self.check(&TokenKind::LeftBrace) {
-            let _ = self.parse_block_statement();
-        }
-
-        let end = name.span.end;
+        let end = if self.check(&TokenKind::LeftBrace) {
+            match self.parse_block_statement() {
+                Some(Statement::Block(block)) => block.span.end,
+                _ => name.span.end,
+            }
+        } else {
+            name.span.end
+        };
         Some(SchemaDeclaration {
             name,
             span: Span {
@@ -367,7 +430,11 @@ impl<'a> Parser<'a> {
             Some(TokenKind::LeftBracket) => {
                 self.advance();
                 let inner = self.parse_type_annotation()?;
-                self.expect(&TokenKind::RightBracket);
+                if self.expect(&TokenKind::RightBracket).is_none() {
+                    let token = self.current()?.clone();
+                    self.diagnostics
+                        .push(missing_close_token(&token, &TokenKind::RightBracket));
+                }
                 Some(TypeAnnotation::Array(Box::new(inner)))
             }
             Some(_) => {
@@ -401,6 +468,46 @@ impl<'a> Parser<'a> {
 
     fn parse_precedence(&mut self, min_precedence: u8) -> Option<Expression> {
         let mut left = self.parse_prefix()?;
+        loop {
+            if self.consume_if(&TokenKind::Dot).is_some() {
+                let property = self.parse_identifier()?;
+                let span = Span {
+                    start: expression_span(&left).start,
+                    end: property.span.end,
+                };
+                left = Expression::Member(MemberExpression {
+                    object: Box::new(left),
+                    property,
+                    span,
+                });
+            } else if let Some(open) = self.consume_if(&TokenKind::LeftParen) {
+                let mut arguments = Vec::new();
+                if !self.check(&TokenKind::RightParen) {
+                    loop {
+                        arguments.push(self.parse_expression()?);
+                        if self.consume_if(&TokenKind::Comma).is_none() {
+                            break;
+                        }
+                    }
+                }
+                let close = self.expect(&TokenKind::RightParen).unwrap_or_else(|| {
+                    self.diagnostics
+                        .push(missing_close_token(&open, &TokenKind::RightParen));
+                    open.clone()
+                });
+                let span = Span {
+                    start: expression_span(&left).start,
+                    end: close.span.end,
+                };
+                left = Expression::Call(CallExpression {
+                    callee: Box::new(left),
+                    arguments,
+                    span,
+                });
+            } else {
+                break;
+            }
+        }
 
         while let Some(kind) = self.current_kind() {
             let Some(precedence) = precedence(&kind) else {
@@ -491,6 +598,162 @@ impl<'a> Parser<'a> {
                 None
             }
         }
+    }
+
+    fn parse_method_declaration(&mut self, allow: bool) -> Option<MethodDeclaration> {
+        let start = self.current()?.span.start;
+        self.advance();
+        let Some(opening) = self.expect(&TokenKind::LeftBrace) else {
+            if let Some(token) = self.current().cloned() {
+                self.diagnostics.push(unexpected_token(&token));
+            }
+            return None;
+        };
+        let mut methods = Vec::new();
+        self.skip_separators();
+        while !self.is_at_end() && !self.check(&TokenKind::RightBrace) {
+            let token = self.current()?.clone();
+            if let TokenKind::Identifier(name) = &token.kind {
+                if let Some(method) = HttpMethod::parse(name) {
+                    methods.push((method, token.span));
+                } else {
+                    self.diagnostics.push(unknown_method(&token));
+                }
+                self.advance();
+            } else {
+                self.diagnostics.push(unexpected_token(&token));
+                self.advance();
+            }
+            if self.consume_if(&TokenKind::Comma).is_none() {
+                self.skip_separators();
+                if !self.check(&TokenKind::RightBrace)
+                    && !self.matches(&[TokenKind::Newline, TokenKind::Semicolon])
+                {
+                    self.diagnostics.push(unexpected_token(self.current()?));
+                }
+            }
+            self.skip_separators();
+        }
+        let closing = self
+            .expect(&TokenKind::RightBrace)
+            .unwrap_or(opening.clone());
+        let span = Span {
+            start,
+            end: closing.span.end,
+        };
+        let _ = allow;
+        Some(MethodDeclaration { methods, span })
+    }
+
+    fn parse_process_declaration(&mut self) -> Option<ProcessDeclaration> {
+        let start = self.current()?.span.start;
+        self.advance();
+        let path_token = self.current()?.clone();
+        let TokenKind::String(path) = path_token.kind.clone() else {
+            self.diagnostics.push(invalid_route(&path_token));
+            return None;
+        };
+        self.advance();
+        let method_token = self.current()?.clone();
+        let method = match &method_token.kind {
+            TokenKind::Identifier(name) => HttpMethod::parse(name),
+            _ => None,
+        };
+        let Some(method) = method else {
+            self.diagnostics.push(unknown_method(&method_token));
+            return None;
+        };
+        self.advance();
+        let Some(Statement::Block(block)) = self.parse_block_statement() else {
+            self.diagnostics.push(missing_route_body(method_token.span));
+            return None;
+        };
+        Some(ProcessDeclaration {
+            path,
+            path_span: path_token.span,
+            method,
+            method_span: method_token.span,
+            body: block.statements,
+            span: Span {
+                start,
+                end: block.span.end,
+            },
+        })
+    }
+
+    fn parse_if_statement(&mut self) -> Option<Statement> {
+        let token = self.current()?.clone();
+        self.advance();
+        let condition = self.parse_expression()?;
+        let Some(Statement::Block(then_branch)) = self.parse_block_statement() else {
+            self.diagnostics.push(missing_block_at(token.span));
+            return None;
+        };
+        let else_branch = if self.consume_if(&TokenKind::Else).is_some() {
+            if let Some(Statement::Block(block)) = self.parse_block_statement() {
+                Some(block)
+            } else {
+                self.diagnostics.push(missing_block_at(token.span));
+                None
+            }
+        } else {
+            None
+        };
+        let end = else_branch
+            .as_ref()
+            .map_or(then_branch.span.end, |b| b.span.end);
+        Some(Statement::If(IfStatement {
+            condition,
+            then_branch,
+            else_branch,
+            span: Span {
+                start: token.span.start,
+                end,
+            },
+        }))
+    }
+    fn parse_while_statement(&mut self) -> Option<Statement> {
+        let token = self.current()?.clone();
+        self.advance();
+        let condition = self.parse_expression()?;
+        let Some(Statement::Block(body)) = self.parse_block_statement() else {
+            self.diagnostics.push(missing_block_at(token.span));
+            return None;
+        };
+        let end = body.span.end;
+        Some(Statement::While(WhileStatement {
+            condition,
+            body,
+            span: Span {
+                start: token.span.start,
+                end,
+            },
+        }))
+    }
+    fn parse_for_statement(&mut self) -> Option<Statement> {
+        let token = self.current()?.clone();
+        self.advance();
+        let item = self.parse_identifier()?;
+        if self.expect(&TokenKind::In).is_none() {
+            let t = self.current()?.clone();
+            self.diagnostics.push(unexpected_token(&t));
+            return None;
+        }
+        let iterable = self.parse_expression()?;
+        let Some(Statement::Block(body)) = self.parse_block_statement() else {
+            self.diagnostics.push(missing_block_at(token.span));
+            return None;
+        };
+        let end = body.span.end;
+        Some(Statement::For(ForStatement {
+            item,
+            iterable,
+            body,
+            span: Span {
+                start: token.span.start,
+                end,
+            },
+        }))
     }
 
     fn parse_literal(&mut self) -> Option<LiteralExpression> {
@@ -607,6 +870,9 @@ fn item_span(item: &Item) -> Span {
         Item::Function(declaration) => declaration.span,
         Item::Variable(declaration) => declaration.statement.span,
         Item::Schema(declaration) => declaration.span,
+        Item::AllowMethods(declaration) | Item::BlockMethods(declaration) => declaration.span,
+        Item::Process(declaration) => declaration.span,
+        Item::Export(export) => export.span,
         Item::Statement(statement) => statement_span(statement),
     }
 }
@@ -618,6 +884,9 @@ fn statement_span(statement: &Statement) -> Span {
         Statement::Expression(statement) => statement.span,
         Statement::Block(statement) => statement.span,
         Statement::Return(statement) => statement.span,
+        Statement::If(statement) => statement.span,
+        Statement::While(statement) => statement.span,
+        Statement::For(statement) => statement.span,
     }
 }
 
@@ -628,20 +897,8 @@ fn expression_span(expression: &Expression) -> Span {
         Expression::Unary(unary) => unary.span,
         Expression::Binary(binary) => binary.span,
         Expression::Group(group) => expression_span(group),
-    }
-}
-
-fn annotation_span(annotation: &TypeAnnotation) -> Span {
-    match annotation {
-        TypeAnnotation::Named(name) => Span {
-            start: 0,
-            end: name.len(),
-        },
-        TypeAnnotation::Array(inner) => Span {
-            start: 0,
-            end: annotation_span(inner).end + 2,
-        },
-        TypeAnnotation::Object | TypeAnnotation::Unknown => Span::default(),
+        Expression::Call(call) => call.span,
+        Expression::Member(member) => member.span,
     }
 }
 
@@ -743,6 +1000,62 @@ fn missing_block_body(name: &Identifier) -> Diagnostic {
     }
 }
 
+fn unknown_method(token: &Token) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code: DiagnosticCode("PCF1005"),
+        message: "unknown HTTP method".to_string(),
+        labels: vec![Label {
+            span: token.span,
+            message: Some("expected a standard HTTP method".to_string()),
+            primary: true,
+        }],
+        notes: vec![
+            "supported methods: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, CONNECT, TRACE."
+                .to_string(),
+        ],
+    }
+}
+fn invalid_route(token: &Token) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code: DiagnosticCode("PCF1006"),
+        message: "route path must be a string literal".to_string(),
+        labels: vec![Label {
+            span: token.span,
+            message: Some("expected a quoted absolute route path".to_string()),
+            primary: true,
+        }],
+        notes: Vec::new(),
+    }
+}
+fn missing_route_body(span: Span) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code: DiagnosticCode("PCF1007"),
+        message: "expected a process body".to_string(),
+        labels: vec![Label {
+            span,
+            message: Some("route declarations require a block".to_string()),
+            primary: true,
+        }],
+        notes: Vec::new(),
+    }
+}
+fn missing_block_at(span: Span) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Error,
+        code: DiagnosticCode("PCF1003"),
+        message: "expected a block body".to_string(),
+        labels: vec![Label {
+            span,
+            message: Some("control flow requires a `{ ... }` body".to_string()),
+            primary: true,
+        }],
+        notes: Vec::new(),
+    }
+}
+
 fn describe_kind(kind: &TokenKind) -> String {
     match kind {
         TokenKind::Identifier(_) => "an identifier".to_string(),
@@ -766,6 +1079,9 @@ fn describe_kind(kind: &TokenKind) -> String {
         TokenKind::For => "`for`".to_string(),
         TokenKind::While => "`while`".to_string(),
         TokenKind::In => "`in`".to_string(),
+        TokenKind::AllowMethods => "`allow_methods`".to_string(),
+        TokenKind::BlockMethods => "`block_methods`".to_string(),
+        TokenKind::RProcess => "`r_process`".to_string(),
         TokenKind::LeftBrace => "`{`".to_string(),
         TokenKind::RightBrace => "`}`".to_string(),
         TokenKind::LeftBracket => "`[`".to_string(),
@@ -776,6 +1092,7 @@ fn describe_kind(kind: &TokenKind) -> String {
         TokenKind::Semicolon => "`;`".to_string(),
         TokenKind::Comma => "`,`".to_string(),
         TokenKind::Dot => "`.`".to_string(),
+        TokenKind::ColonColon => "`::`".to_string(),
         TokenKind::Equal => "`=`".to_string(),
         TokenKind::Plus => "`+`".to_string(),
         TokenKind::Minus => "`-`".to_string(),
@@ -1008,5 +1325,21 @@ mod tests {
         };
         assert_eq!(span.start, 0);
         assert_eq!(span.end, source.len() - 1);
+    }
+
+    #[test]
+    fn function_parameter_span_covers_its_type_annotation_bytes() {
+        let source = "fn add(value: int) { return value; }";
+        let parsed = parse(&lex(source).tokens);
+        let Some(Program { items, .. }) = parsed.program else {
+            panic!("program expected");
+        };
+        let Item::Function(function) = &items[0] else {
+            panic!("function expected");
+        };
+        assert_eq!(
+            &source[function.parameters[0].span.start..function.parameters[0].span.end],
+            "value: int"
+        );
     }
 }

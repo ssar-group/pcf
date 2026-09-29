@@ -9,12 +9,37 @@ pub enum Statement {
     Expression(ExpressionStatement),
     Block(BlockStatement),
     Return(ReturnStatement),
+    If(IfStatement),
+    While(WhileStatement),
+    For(ForStatement),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableStatement {
     pub name: Identifier,
     pub value: Option<Expression>,
+    pub span: Span,
+    pub mutable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfStatement {
+    pub condition: Expression,
+    pub then_branch: BlockStatement,
+    pub else_branch: Option<BlockStatement>,
+    pub span: Span,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhileStatement {
+    pub condition: Expression,
+    pub body: BlockStatement,
+    pub span: Span,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForStatement {
+    pub item: Identifier,
+    pub iterable: Expression,
+    pub body: BlockStatement,
     pub span: Span,
 }
 

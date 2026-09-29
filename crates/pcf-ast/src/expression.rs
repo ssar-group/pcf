@@ -9,6 +9,21 @@ pub enum Expression {
     Unary(UnaryExpression),
     Binary(BinaryExpression),
     Group(Box<Expression>),
+    Call(CallExpression),
+    Member(MemberExpression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallExpression {
+    pub callee: Box<Expression>,
+    pub arguments: Vec<Expression>,
+    pub span: Span,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct MemberExpression {
+    pub object: Box<Expression>,
+    pub property: crate::Identifier,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
