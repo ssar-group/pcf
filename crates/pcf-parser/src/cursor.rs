@@ -18,6 +18,12 @@ impl<'a> Cursor<'a> {
         self.tokens.get(self.position)
     }
 
+    pub fn previous(&self) -> Option<&Token> {
+        self.position
+            .checked_sub(1)
+            .and_then(|position| self.tokens.get(position))
+    }
+
     pub fn current_kind(&self) -> Option<TokenKind> {
         self.current().map(|token| token.kind.clone())
     }

@@ -1,0 +1,64 @@
+// PCF stable language integration fixture.
+// Test all language features and constructs in a single file.
+
+allow_methods {
+    GET,
+    POST,
+    PUT,
+    PATCH
+};
+
+block_methods {
+    DELETE,
+    TRACE
+};
+
+import std::json;
+
+module api;
+
+schema Response {
+}
+
+const API_VERSION = 1;
+let service_name = "PCF";
+
+fn health(message: string) {
+    return message + service_name;
+}
+
+fn calculate(value: int) {
+    let result = value + API_VERSION;
+
+    if result > 10 {
+        return result;
+    } else {
+        return 0;
+    }
+}
+
+fn iterate(items: array) {
+    for item in items {
+        while false {
+            return item;
+        }
+    }
+}
+
+fn serialize(data: object) {
+    return json.encode(data);
+}
+
+r_process "/structure" GET {
+    return;
+}
+
+r_process "/health" GET {
+    return;
+}
+
+r_process "/data" POST {
+    return;
+}
+
+output "PCF language fixture";

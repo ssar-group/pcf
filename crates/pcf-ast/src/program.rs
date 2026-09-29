@@ -1,8 +1,8 @@
 use pcf_span::Span;
 
 use crate::{
-    FunctionDeclaration, ImportDeclaration, ModuleDeclaration, SchemaDeclaration, Statement,
-    VariableDeclaration,
+    FunctionDeclaration, ImportDeclaration, MethodDeclaration, ModuleDeclaration,
+    ProcessDeclaration, SchemaDeclaration, Statement, VariableDeclaration,
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -19,4 +19,14 @@ pub enum Item {
     Variable(VariableDeclaration),
     Schema(SchemaDeclaration),
     Statement(Statement),
+    AllowMethods(MethodDeclaration),
+    BlockMethods(MethodDeclaration),
+    Process(ProcessDeclaration),
+    Export(ExportDeclaration),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExportDeclaration {
+    pub declaration: Box<Item>,
+    pub span: Span,
 }
